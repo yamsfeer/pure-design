@@ -1,0 +1,6 @@
+# 这些是 Google GenAI 的传递依赖，本项目用不到，跳过其构建脚本
+allowBuilds:
+  '@google/genai': false
+  protobufjs: false
+overrides:
+  pure-open-design: 'link:'

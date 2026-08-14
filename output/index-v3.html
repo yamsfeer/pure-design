@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>问候 · 开始今天</title>
+  <style>
+    /* ─── tokens ────────────────────────────────────────────────────
+       映射自 Neutral Modern 设计系统。除 :root 外不使用任何裸 hex。 */
+    :root {
+      --bg:      #FAFAFA;   /* page background — never #fff */
+      --surface: #FFFFFF;   /* cards, inputs */
+      --fg:      #111111;   /* primary text — never #000 */
+      --muted:   #6B6B6B;   /* secondary text, captions */
+      --border:  #E5E5E5;   /* hairlines, dividers */
+      --accent:  #2F6FEB;   /* cobalt — one hero accent + one CTA per screen */
+
+      /* derived — do not change */
+      --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+      --fg-soft:     color-mix(in oklch, var(--fg) 6%, transparent);
+
+      /* type — display = Inter per DESIGN.md (system fallback, no webfont) */
+      --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono:    ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+
+      /* scale — 12 · 16 · 64（一屏不超过三种字号） */
+      --fs-h1:   clamp(44px, 7vw, 64px);
+      --fs-body: 16px;
+      --fs-meta: 12px;
+
+      /* spacing — 8-point grid */
+      --gap-sm: 12px;
+      --gap-md: 20px;
+      --gap-lg: 32px;
+      --gap-xl: 56px;
+      --container: 1200px;
+      --gutter: 24px;
+
+      --radius: 8px;
+    }
+
+    /* ─── reset & base ───────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      line-height: 1.55;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    main { flex: 1; display: flex; flex-direction: column; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    p { text-wrap: pretty; }
+
+    .container {
+      max-width: var(--container);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+
+    /* ─── topnav — 极简，只留品牌字 ───────────────────────────────── */
+    .topnav { border-bottom: 1px solid var(--border); }
+    .topnav-inner { display: flex; align-items: center; padding-block: 18px; }
+    .logo {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: var(--muted);
+    }
+
+    /* ─── 问候主区 — 水平居中、顶部偏置 ───────────────────────────── */
+    .greet {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding-top: clamp(88px, 18vh, 200px);
+      padding-bottom: var(--gap-xl);
+    }
+    .date-line {
+      font-family: var(--font-mono);
+      font-size: var(--fs-meta);
+      letter-spacing: 0.02em;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      margin: 0 0 28px;
+    }
+    .greet h1 {
+      font-family: var(--font-display);
+      font-size: var(--fs-h1);
+      font-weight: 600;
+      line-height: 1.3;          /* CJK display floor */
+      letter-spacing: 0;         /* CJK — no negative tracking */
+      text-wrap: balance;
+      margin: 0 0 24px;
+    }
+    .greet .lead {
+      font-size: var(--fs-body);
+      color: var(--muted);
+      line-height: 1.7;          /* CJK body */
+      max-width: 36ch;
+      margin: 0 0 44px;
+    }
+
+    /* ─── 按钮 — 设计系统：8px 圆角 · 10/16 padding ───────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      font-size: var(--fs-body);
+      font-weight: 500;
+      letter-spacing: 0;
+      transition: transform 0.05s ease, background-color 0.15s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-primary { background: var(--accent); color: var(--surface); }
+    .btn-primary:hover { background: color-mix(in oklch, var(--accent) 88%, black); }
+
+    /* ─── todo 微交互 ─────────────────────────────────────────────── */
+    .todo-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--gap-sm);
+      min-height: 45px;
+    }
+    .todo-form {
+      display: flex;
+      gap: var(--gap-sm);
+      align-items: center;
+      animation: rise 0.18s ease;
+    }
+    .input {
+      width: min(380px, 76vw);
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: var(--fs-body);
+    }
+    .input:focus {
+      outline: 2px solid var(--accent-soft);
+      border-color: var(--accent);
+    }
+    .todo-done {
+      font-size: 14px;
+      color: var(--muted);
+      margin: 0;
+      animation: rise 0.18s ease;
+    }
+    .todo-done:focus { outline: none; }
+    .todo-done span { color: var(--fg); font-weight: 500; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ─── footer ─────────────────────────────────────────────────── */
+    .pagefoot {
+      border-top: 1px solid var(--border);
+      padding-block: 26px;
+      color: var(--muted);
+      font-size: var(--fs-meta);
+    }
+    .pagefoot-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--gap-md);
+      flex-wrap: wrap;
+    }
+    .clock {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.04em;
+    }
+
+    @media (max-width: 640px) {
+      .greet { padding-top: clamp(64px, 14vh, 120px); }
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner">
+      <span class="logo">hello.</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="greet container" data-od-id="greet">
+      <p class="date-line" id="date-line">——</p>
+      <h1 id="greeting">你好。</h1>
+      <p class="lead">今天想先完成哪一件事？写下它，然后开始。</p>
+      <div class="todo-box">
+        <button class="btn btn-primary" id="todo-btn">写下今天的第一件事</button>
+        <form class="todo-form" id="todo-form" hidden>
+          <input class="input" id="todo-input" type="text" maxlength="60"
+                 placeholder="例如：给产品写周报"
+                 aria-label="今天想先完成的一件事"
+                 autocomplete="off" />
+        </form>
+        <p class="todo-done" id="todo-done" role="status" tabindex="-1" hidden>已记录：<span></span></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pagefoot" data-od-id="footer">
+    <div class="container pagefoot-inner">
+      <span>© 2026 问候页</span>
+      <span class="clock" id="clock">--:--:--</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      /* 按本地时间问候 */
+      var now = new Date();
+      var h = now.getHours();
+      var greeting;
+      if (h >= 5 && h < 11) { greeting = '早上好。'; }
+      else if (h >= 11 && h < 14) { greeting = '中午好。'; }
+      else if (h >= 14 && h < 18) { greeting = '下午好。'; }
+      else if (h >= 18 && h < 23) { greeting = '晚上好。'; }
+      else { greeting = '夜深了。'; }
+      document.getElementById('greeting').textContent = greeting;
+
+      var week = ['日', '一', '二', '三', '四', '五', '六'];
+      document.getElementById('date-line').textContent =
+        now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · 星期' + week[now.getDay()];
+
+      /* 「写下今天的第一件事」微交互：按钮 → 输入框 → 已记录 */
+      var btn = document.getElementById('todo-btn');
+      var form = document.getElementById('todo-form');
+      var input = document.getElementById('todo-input');
+      var done = document.getElementById('todo-done');
+
+      btn.addEventListener('click', function () {
+        btn.hidden = true;
+        form.hidden = false;
+        input.focus();
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var v = input.value.trim();
+        if (!v) { input.focus(); return; }
+        form.hidden = true;
+        done.querySelector('span').textContent = v;
+        done.hidden = false;
+        done.focus();
+      });
+
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          input.value = '';
+          form.hidden = true;
+          btn.hidden = false;
+          btn.focus();
+        }
+      });
+
+      /* footer 实时时钟 */
+      var clock = document.getElementById('clock');
+      function pad(n) { return n < 10 ? '0' + n : String(n); }
+      function tick() {
+        var n = new Date();
+        clock.textContent = pad(n.getHours()) + ':' + pad(n.getMinutes()) + ':' + pad(n.getSeconds());
+      }
+      tick();
+      setInterval(tick, 1000);
+    })();
+  </script>
+</body>
+</html>

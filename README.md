@@ -1,141 +1,148 @@
-# pure-open-design
+# Pure Design
 
-极简的 **UI 设计 agent**：提示词 → 一个自包含 HTML。核心是把开源项目 [open-design](https://github.com/nexu-io/open-design) 的设计资产（**162 个技能、151 个设计系统、114 个模板、13 个工艺参考、106 个提示词模板**）完整提取出来，再用 **Pi 的 SDK 作为内置 agent 基座**去驱动它们——没有登录、没有云服务、没有桌面端。
+A minimal **UI design agent**: prompt → a single self-contained HTML. The core idea is to fully extract the design assets of the open-source project [open-design](https://github.com/nexu-io/open-design) (**162 skills, 151 design systems, 114 templates, 13 craft references, 106 prompt templates**) and drive them with **Pi's SDK as the built-in agent base** — no login, no cloud service, no desktop app.
 
-> 为什么内置 Pi？Pi 只是一个 agent 引擎（`@earendil-works/pi-agent-core`）。把它作为依赖装进项目，别人 clone 后 `pnpm install` 就能跑，**不需要在本机安装 Pi**。系统提示词是我们从资产库拼的，技能是资产库里的，Pi 只负责"循环直到满意"。
+> Why bundle Pi? Pi is just an agent engine (`@earendil-works/pi-agent-core`). Bundling it as a dependency means anyone can `pnpm install` and run — **no need to install Pi locally**. The system prompts are composed from the asset library, the skills live in the library, and Pi only handles "loop until satisfied".
 
-## 它是怎么工作的
+[中文文档](README.zh-CN.md)
+
+## How it works
 
 ```
-你的提示词
+Your prompt
     │
     ▼
-┌─ 内置 Pi agent（src/agent.mjs）──────────────────────┐
-│  系统提示词 = frontend-design 技能 + 选定的设计系统    │
-│             + 工艺参考 + 渲染模板契约 + 输出契约       │
-│  agent 原生循环：                                    │
-│    设计 → write_file → 按自检清单自审                │
-│    → 不满足就重写 → 直到满意 → 输出总结               │
+┌─ Built-in Pi agent (src/agent.mjs) ────────────────┐
+│  System prompt = frontend-design skill + chosen     │
+│                 design system + craft + template    │
+│                 contract + output contract          │
+│  Agent loop:                                        │
+│    design → write_file → self-review vs checklist   │
+│    → rewrite if needed → until satisfied → summary  │
 └─────────────────────────────────────────────────────┘
     │ write_file
     ▼
-output/xxx.html（自包含，零外部资源）
+output/xxx.html (self-contained, zero external assets)
     │
     ▼
-Web 界面（src/server.mjs，8745 端口）+ SSH 端口转发 → 本地浏览器
+Web UI (src/server.mjs, port 8745) + SSH forwarding → local browser
 ```
 
-agent 不是"一次生成"，而是**迭代直到合格**：写一版 → 对照自检清单逐条审查 → 有问题就重写 → 满意才停。默认最多 6 轮。
+The agent doesn't generate once — it **iterates until it passes**: write a version, review it against the self-check checklist, rewrite if problems remain, stop when satisfied. Up to 6 rounds by default.
 
-## 快速开始
+## Quick start
 
 ```bash
-pnpm install        # 拉取内置 Pi SDK（仅此一步依赖）
+pnpm install        # pulls the bundled Pi SDK (the only dependency step)
 
-# 方式一：Web 界面（推荐）
-pnpm pure-design preview   # 浏览器 http://127.0.0.1:8745/ 输入需求 → 实时看 agent 迭代 → 预览
+# Way 1: Web UI (recommended)
+pnpm pure-design preview   # http://127.0.0.1:8745/ → type a brief → watch the agent iterate live
 
-# 方式二：命令行（服务器上直接跑）
-pnpm pure-design "给独立开发者的极简记账 App 首页，主打本月支出与预算进度"
-# 内部流程：AI 决策（任务类型/设计系统/方向/skill，模糊才问）→ 装配确认（Enter 或改）
-#           → agent 迭代设计（grilling 澄清）
-pnpm pure-design --yes "…"               # 跳过装配确认，脚本/批量场景
-pnpm pure-design "…" --system stripe     # 指定设计系统（其余 AI 决策）
-pnpm pure-design "…" --max-rounds 4      # 控制迭代上限
-pnpm pure-design "…" -o out/landing.html # 指定输出位置
+# Way 2: CLI
+pnpm pure-design "A minimal expense-tracking app home page for indie developers, focused on this month's spending and budget progress"
+# Flow: AI decision (task type / design system / direction / skill, asks only when ambiguous)
+#       → assembly confirmation (Enter to accept or edit)
+#       → agent iterates (grilling clarification)
+pnpm pure-design --yes "…"               # skip assembly confirmation (scripts / batch)
+pnpm pure-design "…" --system stripe     # pin a design system (rest decided by AI)
+pnpm pure-design "…" --max-rounds 4      # cap iteration rounds
+pnpm pure-design "…" -o out/landing.html # custom output path
 
-# 方式三：单次快速生成（不做 agent 循环）
-pnpm pure-design fast "…" [-s 系统] [-t 模板]
+# Way 3: One-shot fast generation (no agent loop)
+pnpm pure-design fast "…" [-s system] [-t template]
 ```
 
-> 命令名是 `pure-design`（CLI 入口 `bin/pure-design.mjs`，基于 commander）。项目内用 `pnpm pure-design`；想全局用，在项目目录执行 `pnpm link --global` 后任意位置直接敲 `pure-design`。
+> The command is `pure-design` (CLI entry `bin/pure-design.mjs`, built on commander). Use `pnpm pure-design` inside the project; for global use, run `pnpm link --global` in the project directory and type `pure-design` anywhere.
 
-> **输出位置**：默认写到**执行命令的当前目录**，文件名从需求自动派生语义名（中英文混排，如 `极简记账-app-首页.html`），已存在自动 `+v2`/`+v3`。`-o, --out` 可指定路径（相对当前目录或绝对路径）。
+> **Output location**: by default written to the **current working directory**, with a semantic filename derived from the brief (mixed Chinese/English, e.g. `极简记账-app-首页.html`), auto-versioned `+v2`/`+v3` if the file exists. `-o, --out` accepts a path (relative or absolute).
 
-## 命令参考
+## Command reference
 
 ```
-pure-design "设计需求" [选项]    内置 Pi agent 迭代设计（默认，推荐）
-pure-design fast "设计需求" [选项] 单次快速生成
-pure-design preview [端口]      启动 Web 界面 + 预览（默认 8745）
-pure-design tunnel              打印 SSH 端口转发命令
-pure-design --list              列出全部设计系统（151 个）
-pure-design --list-templates    列出全部模板（114 个）
-pure-design --list-directions   列出全部视觉方向（5 个）
+pure-design "brief" [options]       Built-in Pi agent iterative design (default, recommended)
+pure-design fast "brief" [options]  One-shot fast generation
+pure-design preview [port]          Start Web UI + preview (default 8745)
+pure-design tunnel                  Print SSH port-forward command
+pure-design --list                  List all design systems (151)
+pure-design --list-templates        List all templates (114)
+pure-design --list-directions       List all visual directions (5)
 
-选项（默认路径 = AI 自主决策）:
-  -s, --system <name>    指定设计系统（默认 AI 决策，default 兜底）
-  -t, --template <name>  指定模板（默认 AI 按任务类型选）
-  -d, --direction <name> 指定视觉方向（默认 AI 从 5 个 school 自选）
-  -o, --out <path>       输出路径（默认当前目录的语义文件名，已存在自动 +v2）
-  -f, --file <path>      从文件读取提示词
-      --yes              跳过装配确认，直接开始设计
-      --max-rounds <N>   agent 迭代轮数上限（默认 6）
-      --taste            追加反 AI 味审美技能
-  -m, --model <id>       模型（agent 默认 deepseek-v4-flash；fast 默认 claude-sonnet-5）
-      --max-tokens <n>   最大输出 token（仅 fast，默认 16000）
-      --refine           自审 + 精修循环（仅 fast）
+Options (default path = AI decides):
+  -s, --system <name>    Design system (default AI-decided, falls back to `default`)
+  -t, --template <name>  Template (default AI picks by task type)
+  -d, --direction <name> Visual direction (default AI picks from 5 schools)
+  -o, --out <path>       Output path (default: semantic name in CWD, auto +v2)
+  -f, --file <path>      Read prompt from a file
+      --yes              Skip assembly confirmation, start designing immediately
+      --max-rounds <N>   Max agent iteration rounds (default 6)
+      --taste            Append the anti-AI-slop taste skill
+  -m, --model <id>       Model (agent: deepseek-v4-flash; fast: claude-sonnet-5)
+      --max-tokens <n>   Max output tokens (fast only, default 16000)
+      --refine           Self-review + refine loop (fast only)
 ```
 
-> **决策阶段**（纯 `pure-design "需求"` 时）：AI 先推断任务类型（web/dashboard/mobile/deck/editorial/brand），
-> 选择视觉方向（5 个 school 自选）与 skill（按任务类型预筛后 AI 选），设计系统默认 default
-> （需求提到品牌时 AI 识别匹配）。信息不足时 AI 逐条追问（带推荐答案）。决策后展示装配清单，
-> 按 Enter 确认或输入修改项（如 `方向 editorial`）；`--yes` 跳过。
+> **Decision stage** (plain `pure-design "brief"`): the AI first infers the task type
+> (web/dashboard/mobile/deck/editorial/brand), picks a visual direction (from 5 schools)
+> and a skill (pre-filtered by task type, then chosen by AI); the design system defaults
+> to `default` (matched automatically when the brief mentions a brand). When info is
+> insufficient, the AI asks one question at a time (with a recommended answer). After
+> deciding, it shows the assembly summary — press Enter to accept or type an edit
+> (e.g. `方向 editorial`); `--yes` skips this.
 
-## 环境变量
+## Environment variables
 
-| 变量 | 作用 |
+| Variable | Purpose |
 |---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek key（缺省时自动读 `~/.pi/agent/auth.json` 的 `deepseek.key`） |
-| `PURE_DESIGN_PORT` | Web/预览端口（默认 8745） |
-| `PURE_DESIGN_HOST` | 监听地址（默认 127.0.0.1，SSH 转发访问，勿开 0.0.0.0） |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` | 仅单次路径 `fast` 需要 |
+| `DEEPSEEK_API_KEY` | DeepSeek key (falls back to `deepseek.key` in `~/.pi/agent/auth.json`) |
+| `PURE_DESIGN_PORT` | Web/preview port (default 8745) |
+| `PURE_DESIGN_HOST` | Listen address (default 127.0.0.1, access via SSH forwarding; never 0.0.0.0) |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN` | Only needed by the `fast` path |
 
-## 目录结构
+## Project structure
 
 ```
-pure-open-design/
+pure-design/
 ├── bin/
-│   └── pure-design.mjs  唯一 CLI 入口（agent / fast / preview / tunnel / --list…）
-├── src/                 业务层（CLI 由 bin/ 调用）
-│   ├── agent.mjs        内置 Pi 设计 agent（SDK 基座 + agent 循环 + write_file 工具）
-│   ├── router.mjs       决策阶段（任务类型/方向/skill 选型 + 澄清，见 docs/upstream-information-flow.md）
-│   ├── design.mjs       单次快速生成（fast 路径业务函数）
-│   ├── lint.mjs         反 AI 味 lint（写后校验，见 adr/0002）
-│   ├── prompt.mjs       从 assets/ 拼装系统提示词（共享）
-│   └── server.mjs       极简 Web 界面 + 画廊 + SSE 进度 + 预览
-├── assets/              完整提取的资产库（82M，独立资产，与项目命名无关）
-│   ├── skills/          162 个技能（frontend-design、taste-skill、gsap-* …）
-│   ├── design-systems/  151 个设计系统（DESIGN.md 品牌契约 + tokens）
-│   ├── design-templates/ 114 个渲染模板
-│   ├── craft/           13 个工艺参考
-│   └── prompt-templates/ 106 个提示词模板
-├── output/              Web 界面画廊 + 预览的默认目录（CLI 默认输出到当前目录）
-├── scripts/pure-design-remote  本地一键脚本（转发 + 远端生成 + 开浏览器）
-└── package.json         依赖仅 pi-agent-core + pi-ai + commander + marked
+│   └── pure-design.mjs  The only CLI entry (agent / fast / preview / tunnel / --list…)
+├── src/                 Business layer (called by bin/)
+│   ├── agent.mjs        Built-in Pi design agent (SDK base + agent loop + write_file tool)
+│   ├── router.mjs       Decision stage (task type / direction / skill selection + clarification)
+│   ├── design.mjs       One-shot fast generation (fast-path business functions)
+│   ├── lint.mjs         Deterministic anti-AI-slop lint (post-write check, see adr/0002)
+│   ├── prompt.mjs       Compose system prompts from assets/ (shared)
+│   └── server.mjs       Minimal Web UI + gallery + SSE progress + preview
+├── assets/              Fully extracted asset library (82M, standalone assets)
+│   ├── skills/          162 skills (frontend-design, taste-skill, gsap-* …)
+│   ├── design-systems/  151 design systems (DESIGN.md brand contracts + tokens)
+│   ├── design-templates/ 114 rendering templates
+│   ├── craft/           13 craft references
+│   └── prompt-templates/ 106 prompt templates
+├── output/              Generated results (Web UI gallery + preview)
+├── scripts/pure-design-remote  Local one-click script (forward + remote generation + open browser)
+└── package.json         Deps: pi-agent-core + pi-ai + commander + marked
 ```
 
-## Web 界面
+## Web UI
 
-`pnpm pure-design preview` 起一个页面（风格参考 open-design，暖底衬线、单一强调色、极简）：
-- 一个输入框写需求，选设计系统/模板，点「开始设计」
-- **实时 SSE 进度**：看到 agent 每一轮的写入
-- 完成后给预览链接 + agent 的设计总结
-- 另有 `/gallery` 历史画廊，列出所有生成过的页面
+`pnpm pure-design preview` serves a page (style inspired by open-design — warm paper background, serif headlines, one accent color, minimal):
+- A textarea for the brief, design system/template pickers, and a "Start design" button
+- **Live SSE progress**: watch each round of the agent's writes
+- On completion: preview link + the agent's design summary
+- A `/gallery` history gallery listing every generated page
 
-## 加自己的设计系统
+## Adding your own design system
 
-建 `assets/design-systems/你的品牌/DESIGN.md`，按现有格式写配色/字体/间距/组件，然后 `--system 你的品牌`。
+Create `assets/design-systems/your-brand/DESIGN.md`, write colors/typography/spacing/components following the existing format, then `--system your-brand`.
 
-## 与上游的关系
+## Relationship to upstream
 
-- **不是重构，是提取**：设计资产完整拷到 `assets/`（82M）；工具是覆盖其上的薄层。
-- 舍弃的是外围设施：登录/鉴权、网页应用（上游那个大的）、桌面端、守护进程、MCP、插件市场。
-- 多了一个内置 agent 基座（Pi SDK，~几十 MB node_modules），换来"迭代直到满意"而不引入外部依赖。
-- `upstream/` 是下载的原仓库，只读参考，保留供对照上游实现。
+- **Extraction, not rewrite**: design assets are copied wholesale into `assets/` (82M); the tooling is a thin layer on top.
+- What was dropped: peripheral infrastructure — login/auth, the big web app, desktop client, daemon, MCP, plugin marketplace.
+- What was added: a bundled agent base (Pi SDK) in exchange for "iterate until satisfied" with zero external dependencies.
+- `upstream/` is the downloaded original repo, read-only reference, kept for consulting the upstream implementation.
 
-## 备注
+## Notes
 
-- agent 的迭代靠 DeepSeek 推理 + 自检清单驱动，慢但质优（单轮约 30s~2min，完整一轮 1~5min）。
-- 换更强的模型：`--model deepseek-v4-pro`；本地想更省：`--model deepseek-v4-flash`。
-- 输出默认在**执行目录**，语义命名自动 +v2/+v3；`-o` 指定任意位置。
+- The agent iterates on DeepSeek reasoning + the self-check checklist — slower but higher quality (one round ~30s–2min, a full pass 1–5min).
+- Stronger model: `--model deepseek-v4-pro`; cheaper locally: `--model deepseek-v4-flash`.
+- Output defaults to the **execution directory** with semantic naming and auto `+v2`/`+v3`; `-o` places it anywhere.

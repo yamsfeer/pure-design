@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>跨境运营 · 管理后台</title>
+    <style>
+        /* ---------- 设计系统映射 (Stripe-inspired) ---------- */
+        :root {
+            --bg: #ffffff;
+            --surface: #ffffff;
+            --surface-subtle: #f8fafd;
+            --fg: #061b31;
+            --muted: #64748d;
+            --label: #273951;
+            --border: #e5edf5;
+            --accent: #533afd;
+            --accent-hover: #4434d4;
+            --shadow-blue: rgba(50, 50, 93, 0.25);
+            --shadow-black: rgba(0, 0, 0, 0.08);
+            --success: #15be53;
+            --success-bg: rgba(21, 190, 83, 0.15);
+            --danger: #ea2261;
+            --danger-bg: rgba(234, 34, 97, 0.06);
+            --radius: 6px;
+            --font-sans: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: "SFMono-Regular", "Source Code Pro", monospace;
+            font-family: var(--font-sans);
+            font-feature-settings: "ss01" on; /* 品牌字形 */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--fg);
+            font-weight: 300;
+            line-height: 1.4;
+            font-size: 16px;
+            min-height: 100vh;
+            display: flex;
+            align-items: stretch;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            width: 240px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            padding: 24px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            flex-shrink: 0;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-left: 8px;
+            font-weight: 400;
+            color: var(--fg);
+            font-size: 18px;
+            letter-spacing: -0.2px;
+        }
+
+        .brand-mark {
+            background: var(--accent);
+            border-radius: 4px;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+            font-size: 16px;
+            box-shadow: var(--shadow-blue) 0px 6px 12px -6px;
+        }
+
+        .nav-links {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border-radius: var(--radius);
+            color: var(--label);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 400;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .nav-link svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 1.8;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .nav-link:hover {
+            background: rgba(83, 58, 253, 0.06);
+            color: var(--accent);
+        }
+
+        .nav-link.active {
+            background: rgba(83, 58, 253, 0.1);
+            color: var(--accent);
+            font-weight: 450;
+        }
+
+        .nav-section-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--muted);
+            padding-left: 12px;
+            margin-top: 12px;
+            font-weight: 400;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--label);
+            font-size: 13px;
+        }
+
+        .avatar {
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 500;
+            font-size: 14px;
+            letter-spacing: 0;
+        }
+
+        /* 主区域 */
+        .main-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            background: var(--bg);
+        }
+
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            padding: 18px 32px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .page-title h1 {
+            font-size: 24px;
+            font-weight: 300;
+            letter-spacing: -0.3px;
+            color: var(--fg);
+            margin-bottom: 4px;
+        }
+
+        .page-title span {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 400;
+        }
+
+        .search-area {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-shrink: 0;
+        }
+
+        .search-box {
+            border: 1px solid var(--border);
+            border-radius: 40px;
+            padding: 8px 16px;
+            width: 220px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface);
+        }
+
+        .search-box input {
+            border: none;
+            outline: none;
+            font-size: 14px;
+            width: 100%;
+            background: transparent;
+            color: var(--fg);
+            font-weight: 300;
+        }
+
+        .search-box input::placeholder {
+            color: var(--muted);
+            font-weight: 300;
+        }
+
+        .search-box svg {
+            width: 16px;
+            height: 16px;
+            stroke: var(--muted);
+            fill: none;
+            stroke-width: 2;
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--surface);
+            padding: 4px 10px 4px 4px;
+            border-radius: 40px;
+            border: 1px solid var(--border);
+        }
+
+        .user-badge .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px var(--surface);
+        }
+
+        .user-badge .name {
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--label);
+        }
+
+        /* 主体内容 */
+        .content {
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            overflow-y: auto;
+        }
+
+        /* KPI 卡片 */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 20px 18px;
+            box-shadow: var(--shadow-blue) 0px 12px 24px -18px, var(--shadow-black) 0px 4px 8px -6px;
+            transition: transform 0.15s, box-shadow 0.2s;
+        }
+
+        .kpi-card:hover {
+            box-shadow: var(--shadow-blue) 0px 20px 30px -20px, var(--shadow-black) 0px 8px 16px -8px;
+            transform: translateY(-2px);
+        }
+
+        .kpi-label {
+            font-size: 14px;
+            color: var(--label);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 400;
+        }
+
+        .kpi-value {
+            font-size: 34px;
+            font-weight: 300;
+            letter-spacing: -1px;
+            color: var(--fg);
+            line-height: 1.1;
+            font-feature-settings: "tnum" on, "ss01" on;
+        }
+
+        .kpi-delta {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            margin-top: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-weight: 400;
+            letter-spacing: -0.1px;
+        }
+
+        .delta-up {
+            background: var(--success-bg);
+            color: #108c3d;
+        }
+
+        .delta-down-negative {
+            background: var(--danger-bg);
+            color: var(--danger);
+        }
+
+        .delta-flat {
+            background: #eef2f6;
+            color: var(--label);
+        }
+
+        /* 图表卡片 */
+        .chart-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px 24px 16px;
+            box-shadow: var(--shadow-blue) 0px 8px 20px -16px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .card-header h3 {
+            font-size: 20px;
+            font-weight: 300;
+            letter-spacing: -0.2px;
+            color: var(--fg);
+        }
+
+        .card-header .meta {
+            font-size: 13px;
+            color: var(--muted);
+            font-weight: 400;
+            margin-top: 4px;
+        }
+
+        .chart-legend {
+            display: flex;
+            gap: 18px;
+            font-size: 12px;
+            color: var(--label);
+            align-items: center;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+            display: inline-block;
+            margin-right: 6px;
+        }
+
+        .legend-item {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* 图表区域 */
+        .chart-svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .axis-text {
+            font-size: 10px;
+            fill: var(--muted);
+            font-weight: 400;
+        }
+
+        .line-path {
+            fill: none;
+            stroke: var(--accent);
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .area-path {
+            fill: url(#lineGradient);
+            stroke: none;
+            opacity: 0.08;
+        }
+
+        .grid-line {
+            stroke: var(--border);
+            stroke-width: 1;
+            stroke-dasharray: 3 4;
+        }
+
+        /* 表格 */
+        .table-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-blue) 0px 8px 20px -16px;
+            overflow: hidden;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .table-header h3 {
+            font-size: 20px;
+            font-weight: 300;
+            letter-spacing: -0.2px;
+        }
+
+        .table-scroll {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            font-feature-settings: "tnum" on;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 24px;
+            color: var(--label);
+            font-weight: 400;
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+            background: var(--surface-subtle);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 14px 24px;
+            border-bottom: 1px solid var(--border);
+            color: var(--fg);
+            font-weight: 300;
+            white-space: nowrap;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        td.num {
+            font-feature-settings: "tnum" on, "ss01" on;
+        }
+
+        .badge-refund {
+            background: var(--danger-bg);
+            color: var(--danger);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .badge-shipping {
+            background: rgba(83, 58, 253, 0.08);
+            color: var(--accent);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .badge-quality {
+            background: rgba(155, 104, 41, 0.12);
+            color: #8a5a1d;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .badge-other {
+            background: #eef2f6;
+            color: var(--label);
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 400;
+        }
+
+        .delta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        /* 交互状态 */
+        .btn-icon-hover:hover {
+            background: rgba(83, 58, 253, 0.08);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* 响应式 */
+        @media (max-width: 1200px) {
+            .kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 860px) {
+            .sidebar {
+                display: none;
+            }
+            .topbar {
+                padding: 16px;
+            }
+            .content {
+                padding: 16px;
+            }
+            .search-box {
+                width: 140px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+            .page-title h1 {
+                font-size: 20px;
+            }
+            .user-badge .name {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar" data-od-id="sidebar">
+    <div class="brand">
+        <div class="brand-mark">◆</div>
+        <span>北境跨境</span>
+    </div>
+
+    <nav class="nav-links" aria-label="主导航">
+        <a href="#" class="nav-link active">
+            <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+            总览
+        </a>
+        <a href="#" class="nav-link">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            订单管理
+        </a>
+        <a href="#" class="nav-link">
+            <svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            商品
+        </a>
+        <a href="#" class="nav-link">
+            <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            客服
+        </a>
+        <a href="#" class="nav-link">
+            <svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m18 9-5 5-4-4-3 3"/></svg>
+            数据分析
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="avatar">陈</div>
+        <span>陈逸 · 运营</span>
+    </div>
+</aside>
+
+<div class="main-wrap">
+    <header class="topbar" data-od-id="topbar">
+        <div class="page-title">
+            <h1>运营总览</h1>
+            <span>2025年第3季度 · 美金结算</span>
+        </div>
+        <div class="search-area">
+            <div class="search-box">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input type="search" placeholder="搜索订单、客户" aria-label="搜索">
+            </div>
+            <div class="user-badge" role="img" aria-label="用户状态">
+                <div class="status-dot"></div>
+                <span class="name">在线</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="content" data-od-id="main-content">
+
+        <!-- KPI 卡片行 -->
+        <section class="kpi-grid" data-od-id="kpi-cards">
+            <div class="kpi-card">
+                <div class="kpi-label">GMV (总成交额)</div>
+                <div class="kpi-value">$428,210</div>
+                <span class="kpi-delta delta-up">▲ 12.3% <span style="font-weight:300; margin-left:6px;">较上期</span></span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">订单量</div>
+                <div class="kpi-value">8,344</div>
+                <span class="kpi-delta delta-up">▲ 8.7% <span style="font-weight:300; margin-left:6px;">较上期</span></span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">退款率</div>
+                <div class="kpi-value">3.24%</div>
+                <span class="kpi-delta delta-down-negative">▼ 0.6% <span style="font-weight:300; margin-left:6px;">改善</span></span>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">客单价 (AOV)</div>
+                <div class="kpi-value">$51.32</div>
+                <span class="kpi-delta delta-flat">→ 0.2% <span style="font-weight:300; margin-left:6px;">持平</span></span>
+            </div>
+        </section>
+
+        <!-- 折线图卡片 -->
+        <section class="chart-card" data-od-id="sales-trend-chart">
+            <div class="card-header">
+                <div>
+                    <h3>销售趋势</h3>
+                    <div class="meta">过去30天 · 单位: 千美元</div>
+                </div>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-dot" style="background: var(--accent);"></span>GMV</span>
+                    <span class="legend-item"><span class="legend-dot" style="background: #8273fd;"></span>订单量 (右轴)</span>
+                </div>
+            </div>
+            <!-- 内联SVG折线图（示例数据） -->
+            <svg class="chart-svg" viewBox="0 0 720 240" role="img" aria-label="销售趋势折线图，显示近30天GMV与订单量">
+                <defs>
+                    <linearGradient id="lineGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#533afd" stop-opacity="0.2"/>
+                        <stop offset="100%" stop-color="#533afd" stop-opacity="0"/>
+                    </linearGradient>
+                </defs>
+                <!--网格线-->
+                <g stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5">
+                    <line x1="40" y1="30" x2="700" y2="30"/>
+                    <line x1="40" y1="90" x2="700" y2="90"/>
+                    <line x1="40" y1="150" x2="700" y2="150"/>
+                    <line x1="40" y1="210" x2="700" y2="210"/>
+                </g>
+                <!--轴文字-->
+                <text x="20" y="34" class="axis-text">$520</text>
+                <text x="20" y="94" class="axis-text">$390</text>
+                <text x="20" y="154" class="axis-text">$260</text>
+                <text x="20" y="214" class="axis-text">$130</text>
+
+                <!--面积填充 (GMV) -->
+                <polygon class="area-path" points="40,190 95,165 150,175 210,135 270,150 330,110 390,125 450,80 510,95 570,50 630,70 690,45 690,230 40,230" fill="url(#lineGradient)"/>
+                <!-- GMV 折线 (accent) -->
+                <polyline class="line-path" stroke="#533afd" points="40,190 95,165 150,175 210,135 270,150 330,110 390,125 450,80 510,95 570,50 630,70 690,45"/>
+
+                <!-- 订单量趋势 (次要，淡紫色虚线) -->
+                <polyline stroke="#8273fd" stroke-width="1.8" stroke-dasharray="4 3" fill="none" opacity="0.7"
+                          points="40,185 95,150 150,168 210,120 270,138 330,95 390,110 450,68 510,80 570,42 630,55 690,30"/>
+
+                <!-- 横向月份标签 (简化) -->
+                <text x="38" y="235" class="axis-text">8/1</text>
+                <text x="150" y="235" class="axis-text">8/7</text>
+                <text x="270" y="235" class="axis-text">8/14</text>
+                <text x="390" y="235" class="axis-text">8/21</text>
+                <text x="510" y="235" class="axis-text">8/28</text>
+                <text x="630" y="235" class="axis-text">9/4</text>
+                <text x="690" y="235" class="axis-text">今</text>
+            </svg>
+        </section>
+
+        <!-- 退款原因表格 -->
+        <section class="table-section" data-od-id="refund-reasons-table">
+            <div class="table-header">
+                <h3>退款原因分析</h3>
+                <span style="color: var(--muted); font-size:12px; font-weight:400;">本季度 · 抽样 642 笔</span>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>原因类别</th>
+                            <th>退款数量</th>
+                            <th>占比</th>
+                            <th>同比变化</th>
+                            <th>处理状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge-shipping">物流延迟 / 未收到</span></td>
+                            <td class="num">214</td>
+                            <td class="num">33.3%</td>
+                            <td class="num">↑ 5.2%</td>
+                            <td><span class="kpi-delta delta-up" style="background: rgba(21,190,83,0.1); color:#108c3d;">处理中</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-quality">商品质量问题</span></td>
+                            <td class="num">158</td>
+                            <td class="num">24.6%</td>
+                            <td class="num">↓ 1.4%</td>
+                            <td><span class="kpi-delta delta-flat">已质检</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-refund">买家原因 / 不想要</span></td>
+                            <td class="num">127</td>
+                            <td class="num">19.8%</td>
+                            <td class="num">↑ 0.8%</td>
+                            <td><span class="kpi-delta delta-up" style="background: rgba(21,190,83,0.1); color:#108c3d;">已退款</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-other">描述不符 / 发错货</span></td>
+                            <td class="num">88</td>
+                            <td class="num">13.7%</td>
+                            <td class="num">↓ 2.1%</td>
+                            <td><span class="kpi-delta delta-flat">跟进中</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge-other">其他 (重复支付等)</span></td>
+                            <td class="num">55</td>
+                            <td class="num">8.6%</td>
+                            <td class="num">↓ 0.3%</td>
+                            <td><span class="kpi-delta delta-flat">已关闭</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div style="padding: 14px 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted);">
+                示例数据，基于近期运营统计。所有金额为美元。
+            </div>
+        </section>
+    </main>
+</div>
+
+</body>
+</html>

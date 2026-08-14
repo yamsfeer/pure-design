@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>你好</title>
+  <style>
+    /* ─── tokens ────────────────────────────────────────────────────────
+       映射自 Neutral Modern 设计系统：白底（#FAFAFA）、黑字（#111）。
+       本页只用 --bg 与 --fg，其余 token 保留以维持系统契约。 */
+    :root {
+      --bg:      #FAFAFA;   /* 页面背景 —— 视觉上的白，非纯 #fff */
+      --surface: #FFFFFF;
+      --fg:      #111111;   /* 近黑正文 —— 非纯 #000 */
+      --muted:   #6B6B6B;
+      --border:  #E5E5E5;
+      --accent:  #2F6FEB;   /* 本页不使用 */
+
+      --font-display: 'Inter', -apple-system, BlinkMacSystemFont,
+                      'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+
+    /* ─── reset & base ──────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-display);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── 居中问候 ───────────────────────────────────────────────────── */
+    main {
+      min-height: 100vh;
+      min-height: 100svh;          /* 移动端地址栏收起后仍满屏 */
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: clamp(48px, 12vw, 64px);   /* 系统字阶上限 64px */
+      line-height: 1.3;                     /* CJK 展示行高下限 */
+      letter-spacing: 0;                    /* CJK 不加负字距 */
+      margin: 0;
+      text-align: center;
+      animation: fade-in 0.6s ease both;
+    }
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      h1 { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main data-od-id="greeting">
+    <h1>你好</h1>
+  </main>
+</body>
+</html>

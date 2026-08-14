@@ -1,9 +1,9 @@
 {
-  "name": "pure-open-design",
+  "name": "pure-design",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "极简 UI 设计 agent：内置 Pi 基座 + open-design 设计资产，从提示词生成自包含 HTML。",
+  "description": "Pure Design — a minimal UI design agent that turns prompts into self-contained HTML. / 极简 UI 设计 agent：提示词 → 自包含 HTML。",
   "packageManager": "pnpm@11.6.0",
   "license": "Apache-2.0",
   "engines": {

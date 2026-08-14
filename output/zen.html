@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>拾笺 · 禅意书签</title>
+  <style>
+    /* ─── tokens ────────────────────────────────────────────────
+       暖纸感 · 墨色 · 一点朱砂
+       映射自 DESIGN.md（Neutral Modern）——保留全部变量语义，
+       将页面本身的 bg/surface/fg/muted/border/accent 按调性调整色相。 */
+    :root {
+      --bg:      #f5f0e8;   /* 暖纸底 — 非纯白 */
+      --surface: #fbf8f2;   /* 卡片纸面 */
+      --fg:      #2b261d;   /* 墨色文字 — 非纯黑 */
+      --muted:   #8a7d6b;   /* 淡墨，辅助 */
+      --border:  #ded5c4;   /* 纸纹描边 */
+      --accent:  #b35c37;   /* 朱砂 — 全页仅两处: 引号 + 主按钮 */
+
+      /* derived */
+      --accent-soft: color-mix(in oklch, var(--accent) 12%, transparent);
+      --fg-soft:     color-mix(in oklch, var(--fg) 5%, transparent);
+
+      /* type — 禅意衬线为主, 正文无衬线, 编号用等宽 */
+      --font-display: 'Iowan Old Style', 'Charter', 'Songti SC', 'Noto Serif CJK SC', Georgia, serif;
+      --font-body:    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', system-ui, sans-serif;
+      --font-mono:    ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+      /* scale */
+      --fs-h1: clamp(44px, 7vw, 88px);
+      --fs-h2: clamp(28px, 3.6vw, 44px);
+      --fs-h3: 21px;
+      --fs-lead: 18px;
+      --fs-body: 16px;
+      --fs-meta: 13px;
+
+      /* spacing */
+      --gap-xs: 8px;
+      --gap-sm: 12px;
+      --gap-md: 20px;
+      --gap-lg: 32px;
+      --gap-xl: 56px;
+      --gap-2xl: 104px;
+      --container: 1080px;
+      --gutter: 32px;
+
+      --radius: 14px;
+      --radius-lg: 22px;
+    }
+
+    /* ─── reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      line-height: 1.7;           /* 中文行距舒展 */
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      background-image: radial-gradient(circle at 20% 30%, rgba(255,244,222,0.5) 0%, transparent 55%),
+                        radial-gradient(circle at 90% 80%, rgba(220,196,160,0.25) 0%, transparent 45%);
+    }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; transition: color 0.2s ease; }
+    button { font: inherit; cursor: pointer; }
+    p { text-wrap: pretty; margin: 0; }
+    h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+    /* 选中态 — 纸感淡金 */
+    ::selection { background: var(--accent-soft); color: var(--fg); }
+
+    /* ─── layout primitives ─────────────────────────────────────── */
+    .container { max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+    .section { padding-block: clamp(56px, 9vw, var(--gap-2xl)); }
+    .section + .section { border-top: 1px solid var(--border); }
+    .stack { display: flex; flex-direction: column; }
+    .stack > * + * { margin-top: var(--gap-md); }
+    .row { display: flex; align-items: center; gap: var(--gap-md); }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-md); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap-lg); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-lg); }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--gap-md); }
+    .grid-2-1 { display: grid; grid-template-columns: 2fr 1fr; gap: var(--gap-xl); align-items: start; }
+    .grid-1-2 { display: grid; grid-template-columns: 1fr 2fr; gap: var(--gap-xl); align-items: start; }
+    @media (max-width: 920px) {
+      .grid-2, .grid-3, .grid-4, .grid-2-1, .grid-1-2 { grid-template-columns: 1fr; }
+    }
+
+    /* ─── type ──────────────────────────────────────────────────── */
+    h1, .h1 {
+      font-family: var(--font-display);
+      font-size: var(--fs-h1);
+      line-height: 1.3;           /* CJK 标题下界 */
+      letter-spacing: 0.01em;     /* 中文不收紧 */
+      font-weight: 500;
+    }
+    h2, .h2 {
+      font-family: var(--font-display);
+      font-size: var(--fs-h2);
+      line-height: 1.3;           /* CJK 标题行高 */
+      letter-spacing: 0.005em;
+      font-weight: 500;
+    }
+    h3, .h3 { font-size: var(--fs-h3); font-weight: 500; line-height: 1.4; letter-spacing: 0.005em; }
+    .lead { font-size: var(--fs-lead); line-height: 1.75; color: var(--muted); max-width: 58ch; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 var(--gap-md);
+      font-weight: 400;
+    }
+    .meta { font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--muted); letter-spacing: 0.02em; }
+    .num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    /* ─── chrome: topnav + footer ───────────────────────────────── */
+    .topnav {
+      position: sticky; top: 0; z-index: 10;
+      background: color-mix(in oklch, var(--bg) 88%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topnav-inner { display: flex; align-items: center; justify-content: space-between; padding-block: 14px; }
+    .topnav .logo {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      color: var(--fg);
+      display: flex; align-items: baseline; gap: 6px;
+    }
+    .topnav .logo span { color: var(--accent); font-family: var(--font-display); font-size: 24px; }
+    .topnav nav { display: flex; gap: var(--gap-lg); }
+    .topnav nav a { font-size: 14px; color: var(--muted); letter-spacing: 0.02em; }
+    .topnav nav a:hover { color: var(--fg); }
+    .pagefoot { padding-block: var(--gap-xl); color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
+
+    /* ─── buttons ───────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 24px;
+      border-radius: 999px;        /* 圆润，如纸角 */
+      border: 1px solid transparent;
+      font-size: 15px;
+      font-weight: 450;
+      letter-spacing: 0.02em;
+      transition: transform 0.06s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary {
+      background: var(--accent);
+      color: var(--surface);
+      border-color: var(--accent);
+      box-shadow: 0 1px 2px rgba(43,38,29,0.08);
+    }
+    .btn-primary:hover { background: color-mix(in oklch, var(--accent) 88%, #3a2a1e); }
+    .btn-secondary { background: transparent; color: var(--fg); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+    .btn-ghost { background: transparent; color: var(--muted); border-color: transparent; padding-inline: 8px; }
+    .btn-ghost:hover { color: var(--accent); }
+    .btn-arrow::after { content: '→'; transition: transform 0.2s ease; letter-spacing: 0; }
+    .btn-arrow:hover::after { transform: translateX(3px); }
+
+    /* ─── card — 纸笺质感 ───────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 30px 28px;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 4px 16px rgba(60,45,30,0.04);
+      transition: border-color 0.2s ease, box-shadow 0.3s ease;
+    }
+    .card:hover { border-color: color-mix(in oklch, var(--accent) 35%, var(--border)); box-shadow: 0 8px 24px rgba(60,45,30,0.06); }
+    .card-flat { background: transparent; border: 0; padding: 0; box-shadow: none; }
+    .card-rule { background: transparent; border: 0; border-top: 1px solid var(--fg); padding: 24px 0 0; border-radius: 0; }
+
+    /* ─── 书签条目（收藏列表专用） ─────────────────────────────── */
+    .bookmark-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      transition: border-color 0.2s ease, transform 0.15s ease;
+    }
+    .bookmark-card:hover, .bookmark-card:focus-within { border-color: color-mix(in oklch, var(--accent) 30%, var(--border)); transform: translateY(-1px); }
+    .bookmark-card .fav {
+      width: 40px; height: 40px; flex-shrink: 0;
+      display: grid; place-items: center;
+      border-radius: 12px;
+      background: var(--fg-soft);
+      border: 1px solid var(--border);
+      color: var(--accent);
+    }
+    .bookmark-card .fav svg { width: 20px; height: 20px; }
+    .bookmark-card .bk-title { font-size: 16px; font-weight: 500; letter-spacing: 0.01em; }
+    .bookmark-card .bk-url { font-size: 13px; color: var(--muted); font-family: var(--font-mono); }
+    .bookmark-card .bk-arrow { margin-left: auto; color: var(--muted); opacity: 0; transition: opacity 0.2s ease, transform 0.2s ease; }
+    .bookmark-card:hover .bk-arrow, .bookmark-card:focus-within .bk-arrow { opacity: 1; transform: translateX(2px); }
+    .bookmark-card:focus-visible { outline: 2px solid var(--accent-soft); outline-offset: 2px; }
+
+    /* ─── 引号 / 语录 ───────────────────────────────────────────── */
+    .quote {
+      font-family: var(--font-display);
+      font-size: clamp(24px, 2.8vw, 34px);
+      line-height: 1.5;            /* 中文引号行高 */
+      letter-spacing: 0.01em;
+      max-width: 26ch;
+      font-weight: 400;
+    }
+    .quote-author { color: var(--muted); font-size: 14px; margin-top: var(--gap-md); letter-spacing: 0.02em; }
+    .quote-mark {
+      font-family: var(--font-display);
+      font-size: 120px; line-height: 0.6;
+      color: var(--accent); opacity: 0.15;
+      margin-bottom: -20px;
+      font-weight: 500;
+    }
+
+    /* ─── pill / tag ────────────────────────────────────────────── */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      border: 1px solid color-mix(in oklch, var(--accent) 18%, transparent);
+    }
+    .tag {
+      display: inline-flex; align-items: center;
+      padding: 5px 14px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 12px;
+      letter-spacing: 0.03em;
+      transition: all 0.2s ease;
+    }
+    .tag:hover { color: var(--fg); border-color: var(--muted); }
+
+    /* ─── form field ────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field label { font-size: 13px; color: var(--muted); letter-spacing: 0.02em; }
+    .input, .textarea {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: 15px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .input:focus, .textarea:focus {
+      outline: 2px solid var(--accent-soft);
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(179,92,55,0.06);
+    }
+    .textarea { min-height: 96px; resize: vertical; line-height: 1.7; }
+
+    /* ─── 数字区（刻意留白，不用大数字） ──────────────────────── */
+    .stat-num {
+      font-family: var(--font-display);
+      font-size: clamp(40px, 5vw, 64px);
+      line-height: 1.1;
+      letter-spacing: 0.02em;
+      color: var(--fg);
+      font-weight: 400;
+    }
+    .stat-label { color: var(--muted); font-size: 14px; margin-top: 8px; max-width: 26ch; }
+
+    /* ─── 分隔线 ────────────────────────────────────────────────── */
+    .rule { border: 0; border-top: 1px solid var(--border); margin: 0; }
+    .rule-strong { border: 0; border-top: 1px solid var(--fg); margin: 0; opacity: 0.4; }
+
+    /* ─── 图像占位（纸纹块） ───────────────────────────────────── */
+    .ph-img {
+      background:
+        linear-gradient(140deg, var(--accent-soft), var(--fg-soft)),
+        var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      aspect-ratio: 16 / 10;
+      display: grid; place-items: center;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+    }
+    .ph-img.square { aspect-ratio: 1 / 1; }
+
+    /* ─── hero 变体 ─────────────────────────────────────────────── */
+    .hero { padding-block: clamp(96px, 14vw, 190px); }
+    .hero-center { text-align: center; max-width: 34ch; margin-inline: auto; }
+    .hero h1 { margin-bottom: var(--gap-md); }
+    .hero .lead { margin: 0 auto var(--gap-lg); }
+    .hero-cta { display: inline-flex; gap: var(--gap-sm); flex-wrap: wrap; }
+    .hero-center .hero-cta { justify-content: center; }
+
+    /* 书签收藏网格（首页专有） */
+    .bookmark-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--gap-md); }
+    @media (max-width: 640px) { .bookmark-grid { grid-template-columns: 1fr; } }
+
+    /* 顶部导航在窄屏下的处理 */
+    @media (max-width: 640px) {
+      .topnav nav { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner">
+      <span class="logo"><span>·</span> 拾笺</span>
+      <nav>
+        <a href="#">书签</a>
+        <a href="#">札记</a>
+        <a href="#">关于</a>
+      </nav>
+      <button class="btn btn-primary">收一枚</button>
+    </div>
+  </header>
+
+  <main id="content">
+    <!-- 1 ── Hero，居中式，点题 -->
+    <section class="section hero" data-od-id="hero">
+      <div class="container hero-center">
+        <p class="eyebrow">静 心 · 拾 笺</p>
+        <h1>收一纸清欢，<br>藏半卷闲书。</h1>
+        <p class="lead">把散落各处的文章、灵感与句子，轻轻裹在一张纸笺里。不喧嚣，不打扰，只留着想再见的。</p>
+        <div class="hero-cta">
+          <button class="btn btn-primary">开始收藏</button>
+          <button class="btn btn-secondary">浏览示例笺</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2 ── 最近收藏 · 纸笺列表（首页核心） -->
+    <section class="section" data-od-id="recent-bookmarks">
+      <div class="container">
+        <div class="row-between" style="margin-bottom: 40px; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <p class="eyebrow" style="margin-bottom: 8px;">近 日 所 拾</p>
+            <h2>几张新笺</h2>
+          </div>
+          <a class="btn btn-ghost btn-arrow" href="#">看全部</a>
+        </div>
+
+        <div class="stack" style="gap: var(--gap-sm);">
+          <!-- 纸笺 1 -->
+          <article class="bookmark-card" tabindex="0" aria-label="书签：山家清供 宋人食单">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4V3z"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">山家清供 · 宋人食单</div>
+              <div class="bk-url">zh.wikisource.org / 山家清供</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+
+          <!-- 纸笺 2 -->
+          <article class="bookmark-card" tabindex="0" aria-label="书签：夜航船 序言">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M4 9h16M4 13h10M4 17h7"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">夜航船 · 自序</div>
+              <div class="bk-url">zh.wikisource.org / 夜航船</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+
+          <!-- 纸笺 3 -->
+          <article class="bookmark-card" tabindex="0" aria-label="书签：湖心亭看雪 张岱">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.5 6.5L21 9l-5 4.5L17.5 21 12 17l-5.5 4L8 13.5 3 9l6.5-.5L12 2z"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">湖心亭看雪</div>
+              <div class="bk-url">张岱 · 陶庵梦忆</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+
+          <!-- 纸笺 4 -->
+          <article class="bookmark-card" tabindex="0" aria-label="书签：人间词话 三境界">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">人间词话 · 三境界</div>
+              <div class="bk-url">王国维 · 词话</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+
+          <!-- 纸笺 5 -->
+          <article class="bookmark-card" tabindex="0" aria-label="书签：闲情偶寄 居室部">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">闲情偶寄 · 居室部</div>
+              <div class="bk-url">李渔 · 闲情偶寄</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+
+          <!-- 纸笺 6（示例占位，明确标注） -->
+          <article class="bookmark-card" tabindex="0" aria-label="示例书签：你的下一条收藏">
+            <div class="fav" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14" opacity="0.5"/></svg>
+            </div>
+            <div>
+              <div class="bk-title">（示例）你的下一条收藏</div>
+              <div class="bk-url">等待被拾起的一纸空白</div>
+            </div>
+            <span class="bk-arrow" aria-hidden="true">→</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3 ── 一句引文（留白营造） -->
+    <section class="section" data-od-id="quote">
+      <div class="container" style="max-width: 760px;">
+        <div class="quote-mark">“</div>
+        <blockquote class="quote">凡有所相，皆是虚妄。若见诸相非相，即见如来。</blockquote>
+        <p class="quote-author">— 《金刚经》 · 如理实见分</p>
+      </div>
+    </section>
+
+    <!-- 4 ── 存放方式 · 三枚纸笺 -->
+    <section class="section" data-od-id="features">
+      <div class="container stack" style="gap: 64px;">
+        <div style="max-width: 32ch;">
+          <p class="eyebrow">收 藏 之 道</p>
+          <h2>三件顺手的小事</h2>
+        </div>
+        <div class="grid-3">
+          <div class="card-flat">
+            <div class="feature-mark" style="width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 14px; color: var(--accent); margin-bottom: 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 20px; height: 20px;"><path d="M12 3v18M3 12h18"/></svg>
+            </div>
+            <h3>轻点即存</h3>
+            <p style="margin: 6px 0 0; color: var(--muted); font-size: 15px;">看到好文，选中一段，一枚书签便落下。不打断阅读。</p>
+          </div>
+          <div class="card-flat">
+            <div class="feature-mark" style="width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 14px; color: var(--accent); margin-bottom: 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 20px; height: 20px;"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>
+            </div>
+            <h3>静置沉淀</h3>
+            <p style="margin: 6px 0 0; color: var(--muted); font-size: 15px;">不推送，不打扰。每张笺都留在原处，等你恰好回来。</p>
+          </div>
+          <div class="card-flat">
+            <div class="feature-mark" style="width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 14px; color: var(--accent); margin-bottom: 20px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 20px; height: 20px;"><path d="M4 7h16M4 12h10M4 17h16"/></svg>
+            </div>
+            <h3>纸感分栏</h3>
+            <p style="margin: 6px 0 0; color: var(--muted); font-size: 15px;">按心情给笺纸分类——茶边、路上、枕侧，各得其所。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5 ── CTA，收束 -->
+    <section class="section" data-od-id="cta-strip" style="text-align: center;">
+      <div class="container" style="max-width: 560px;">
+        <p class="eyebrow" style="margin-bottom: 16px;">此 刻 可 以</p>
+        <h2>留一纸空白，给未来的自己。</h2>
+        <p class="lead" style="margin: 16px auto 36px;">免费，无广告，无推送。只做一件事：帮你好好收着。</p>
+        <button class="btn btn-primary">拾起第一笺</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pagefoot" data-od-id="footer">
+    <div class="container row-between" style="flex-wrap: wrap; gap: 16px;">
+      <span>© 拾笺 · 甲辰年</span>
+      <span class="meta">不喧哗 · 自有声 · hi@example.com</span>
+    </div>
+  </footer>
+</body>
+</html>

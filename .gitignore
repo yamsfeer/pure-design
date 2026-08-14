@@ -1,11 +1,6 @@
 # 依赖
 node_modules/
 
-# 生成产物（agent 输出的 HTML 不进仓库）
-/output/*
-# 例外：can-i-deploy.html 是手工设计的展示稿（非 agent 生成物），保留在仓库
-!/output/can-i-deploy.html
-
 # 一键脚本传服务器的临时提示词
 /.brief.txt
 

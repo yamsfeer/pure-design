@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>访问分析 · 观数数据看板</title>
+<style>
+  /* ─── tokens ─────────────────────────────────────────────────────────
+     品牌契约（tech-utility / Datadog-GitHub 方向）— 六个核心 token 照抄绑定。 */
+  :root {
+    --bg:      oklch(98% 0.005 250);
+    --surface: oklch(100% 0 0);
+    --fg:      oklch(22% 0.02 240);
+    --muted:   oklch(50% 0.018 240);
+    --border:  oklch(90% 0.008 240);
+    --accent:  oklch(58% 0.16 145);
+
+    --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-body:    -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-mono:    'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+
+    /* 派生 token — 一律由上方 token 推导，不新增色相 */
+    --accent-soft:  color-mix(in oklch, var(--accent) 12%, transparent);
+    --fg-soft:      color-mix(in oklch, var(--fg) 5%, transparent);
+    --muted-strong: color-mix(in oklch, var(--muted) 66%, var(--fg));
+    --success:      oklch(52% 0.14 152);
+    --danger:       oklch(54% 0.19 27);
+    --warn:         oklch(66% 0.15 85);
+    --warn-strong:  color-mix(in oklch, var(--warn) 55%, var(--fg));
+    /* 渠道色阶 — 单一 accent 色相的明度渐变，用于环形图与条形 */
+    --ch-1: var(--accent);
+    --ch-2: color-mix(in oklch, var(--accent) 68%, var(--fg));
+    --ch-3: color-mix(in oklch, var(--accent) 46%, var(--fg));
+    --ch-4: color-mix(in oklch, var(--accent) 60%, var(--surface));
+    --ch-5: color-mix(in oklch, var(--fg) 52%, var(--surface));
+    --ch-6: color-mix(in oklch, var(--fg) 30%, var(--surface));
+
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  /* ─── reset & base ─────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  img, svg { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; cursor: pointer; }
+  h1, h2, h3, h4 { margin: 0; text-wrap: balance; font-family: var(--font-display); }
+  p { text-wrap: pretty; }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ─── shell ────────────────────────────────────────────────────────── */
+  .shell { display: flex; min-height: 100vh; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  /* ─── sidebar ──────────────────────────────────────────────────────── */
+  .sidebar {
+    width: 232px; flex: none;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 16px 12px;
+    display: flex; flex-direction: column; gap: 14px;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  .side-brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px; }
+  .brand-mark {
+    width: 26px; height: 26px; border-radius: 7px;
+    border: 1px solid var(--border);
+    display: grid; place-items: center; color: var(--fg);
+  }
+  .brand-mark svg { width: 15px; height: 15px; }
+  .brand-name { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand-tag {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--muted-strong); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-top: 3px;
+  }
+  .side-label {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--muted-strong); letter-spacing: 0.08em;
+    text-transform: uppercase; margin: 16px 8px 6px;
+  }
+  .side-nav { display: flex; flex-direction: column; }
+  .side-nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--radius);
+    color: var(--muted-strong); font-size: 14px; margin-bottom: 2px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .side-nav a svg { width: 16px; height: 16px; flex: none; }
+  .side-nav a:hover { background: var(--fg-soft); color: var(--fg); }
+  .side-nav a.active { background: var(--fg-soft); color: var(--fg); font-weight: 500; }
+  .side-foot {
+    margin-top: auto; border-top: 1px solid var(--border);
+    padding-top: 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .avatar {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--fg-soft); color: var(--fg);
+    display: grid; place-items: center; font-size: 12px; font-weight: 600;
+  }
+  .side-user-name { font-size: 13px; font-weight: 500; line-height: 1.3; }
+  .side-user-role { font-size: 11px; color: var(--muted-strong); }
+
+  /* ─── topbar ───────────────────────────────────────────────────────── */
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 10px 20px;
+    background: color-mix(in oklch, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 12px;
+    width: min(320px, 40vw);
+    transition: border-color .15s ease;
+  }
+  .search-box:focus-within { border-color: var(--accent); }
+  .search-box svg { width: 15px; height: 15px; color: var(--muted-strong); flex: none; }
+  .search-box input {
+    border: 0; outline: 0; background: transparent;
+    font: inherit; font-size: 13px; color: var(--fg); width: 100%;
+  }
+  .search-box input::placeholder { color: var(--muted); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+  .update-meta { font-size: 12px; color: var(--muted-strong); }
+  .icon-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border: 1px solid var(--border);
+    border-radius: var(--radius); background: var(--surface); color: var(--fg);
+    transition: border-color .15s ease;
+  }
+  .icon-btn:hover { border-color: var(--fg); }
+  .icon-btn svg { width: 15px; height: 15px; }
+  .spin { animation: spin .6s ease; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── buttons ──────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-size: 14px; font-weight: 500; letter-spacing: -0.005em;
+    background: transparent; color: var(--fg);
+    transition: transform .05s ease, background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-sm { padding: 7px 12px; font-size: 13px; }
+  .btn-secondary { border-color: var(--border); background: var(--surface); }
+  .btn-secondary:hover { border-color: var(--fg); }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted-strong); padding-inline: 6px; }
+  .btn-ghost:hover { color: var(--fg); }
+  .btn-arrow::after { content: '→'; transition: transform .15s ease; }
+  .btn-arrow:hover::after { transform: translateX(2px); }
+  .btn svg { width: 15px; height: 15px; flex: none; }
+
+  /* ─── content ──────────────────────────────────────────────────────── */
+  .content {
+    padding: 20px; width: 100%; max-width: 1400px; margin-inline: auto;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .page-head h1 { font-size: 24px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+  .page-head .meta { margin-top: 4px; font-size: 12px; color: var(--muted-strong); }
+  .page-actions { display: flex; gap: 8px; }
+
+  /* ─── card ─────────────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .card-title h2 { font-size: 16px; font-weight: 600; letter-spacing: 0; line-height: 1.3; }
+  .card-title .meta { font-size: 12px; color: var(--muted-strong); margin-top: 2px; }
+  .card-body { padding: 10px 10px 8px; }
+
+  /* ─── segmented control ────────────────────────────────────────────── */
+  .seg { display: inline-flex; background: var(--fg-soft); border-radius: var(--radius); padding: 3px; gap: 2px; }
+  .seg-btn {
+    border: 0; background: transparent; color: var(--muted-strong);
+    font-size: 12px; font-weight: 500; padding: 5px 12px; border-radius: 6px;
+    transition: background .15s ease, color .15s ease;
+  }
+  .seg-btn:hover { color: var(--fg); }
+  .seg-btn.active {
+    background: var(--surface); color: var(--fg);
+    box-shadow: 0 1px 2px color-mix(in oklch, var(--fg) 10%, transparent);
+  }
+
+  /* ─── KPI ──────────────────────────────────────────────────────────── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi { padding: 18px; position: relative; overflow: hidden; }
+  .kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .kpi-label { font-size: 13px; color: var(--muted-strong); }
+  .kpi-value { font-size: 28px; font-weight: 600; letter-spacing: -0.01em; margin-top: 10px; }
+  .kpi-sub { font-size: 12px; color: var(--muted-strong); margin-top: 4px; padding-right: 84px; }
+  .kpi .spark { position: absolute; right: 14px; bottom: 12px; width: 74px; height: 30px; pointer-events: none; }
+  .spark path { stroke: var(--muted); stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ─── pills ────────────────────────────────────────────────────────── */
+  .pill-delta {
+    display: inline-flex; align-items: center; gap: 2px;
+    padding: 2px 8px; border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.02em;
+  }
+  .pill-delta.up   { color: var(--success); background: color-mix(in oklch, var(--success) 10%, transparent); }
+  .pill-delta.down { color: var(--danger);  background: color-mix(in oklch, var(--danger) 10%, transparent); }
+  .pill-delta.flat { color: var(--muted-strong); background: var(--fg-soft); }
+  .pill-warn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--warn-strong); background: color-mix(in oklch, var(--warn) 16%, transparent);
+  }
+  .tag {
+    display: inline-flex; align-items: center; padding: 3px 10px;
+    background: transparent; color: var(--muted-strong);
+    border: 1px solid var(--border); border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  }
+
+  /* ─── chart grid ───────────────────────────────────────────────────── */
+  .chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; align-items: start; }
+
+  /* ─── trend chart ──────────────────────────────────────────────────── */
+  .chart-wrap { position: relative; padding: 4px 8px 0; }
+  .chart-wrap svg { width: 100%; height: auto; display: block; }
+  .chart-gridline { stroke: var(--border); stroke-width: 1; }
+  .chart-guide { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+  .chart-ylab { font-family: var(--font-mono); font-size: 10px; fill: var(--muted-strong); text-anchor: end; }
+  .chart-xlab { font-family: var(--font-mono); font-size: 10px; fill: var(--muted-strong); }
+  .chart-area { fill: url(#areaGrad); }
+  .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .pt { fill: var(--surface); stroke: var(--accent); stroke-width: 1.6; pointer-events: none; }
+  .pt-hot { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
+  .tip {
+    display: none; position: absolute; z-index: 5; pointer-events: none;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; min-width: 128px;
+    box-shadow: 0 2px 8px color-mix(in oklch, var(--fg) 8%, transparent);
+  }
+  .tip-date { font-family: var(--font-mono); font-size: 11px; color: var(--muted-strong); margin-bottom: 4px; }
+  .tip-val { font-size: 12px; font-weight: 600; }
+  .tip-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); margin-right: 6px; }
+
+  /* ─── donut ────────────────────────────────────────────────────────── */
+  .donut-wrap { display: flex; gap: 18px; align-items: center; padding: 20px; }
+  #donutSvg { flex: none; width: 168px; height: 168px; }
+  .dseg { fill: none; stroke-width: 22; cursor: pointer; transition: stroke-width .15s ease, filter .15s ease; }
+  .dseg-hot { stroke-width: 28; filter: drop-shadow(0 1px 3px color-mix(in oklch, var(--fg) 25%, transparent)); }
+  .donut-big { font-size: 20px; font-weight: 600; fill: var(--fg); }
+  .donut-small { font-size: 10px; fill: var(--muted-strong); letter-spacing: 0.02em; }
+  .donut-legend { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .dl-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; }
+  .dl-row:hover, .dl-hot { background: var(--fg-soft); }
+  .dl-dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .dl-name { font-size: 13px; }
+  .dl-share { margin-left: auto; font-size: 13px; color: var(--muted-strong); }
+
+  /* ─── channel detail ───────────────────────────────────────────────── */
+  .cd-list { padding: 6px 14px 10px; }
+  .cd-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .cd-row:last-child { border-bottom: 0; }
+  .cd-top { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .cd-name { font-size: 13px; font-weight: 500; }
+  .cd-share { margin-left: auto; font-size: 13px; color: var(--muted-strong); }
+  .bar-track { height: 6px; background: var(--fg-soft); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; }
+  .cd-meta { margin-top: 6px; font-size: 12px; color: var(--muted-strong); }
+
+  /* ─── table ────────────────────────────────────────────────────────── */
+  .table-scroll { overflow-x: auto; }
+  .ds-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .ds-table th {
+    text-align: left; padding: 10px 14px;
+    color: var(--muted-strong); font-weight: 500;
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .ds-table td { padding: 11px 14px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .ds-table tbody tr { transition: background .12s ease; }
+  .ds-table tbody tr:hover { background: var(--fg-soft); }
+  .ds-table .num-col { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .path { font-family: var(--font-mono); font-size: 12px; }
+
+  .foot-meta {
+    text-align: center; font-size: 12px; color: var(--muted-strong);
+    font-family: var(--font-mono); padding: 4px 0 10px;
+  }
+
+  /* ─── responsive ───────────────────────────────────────────────────── */
+  @media (max-width: 1120px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 920px) {
+    .shell { flex-direction: column; }
+    .sidebar {
+      width: 100%; height: auto; position: static;
+      border-right: 0; border-bottom: 1px solid var(--border);
+      padding: 12px 16px; gap: 10px; overflow: visible;
+    }
+    .side-nav { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+    .side-nav a { white-space: nowrap; margin-bottom: 0; }
+    .side-label { display: none; }
+    .side-foot { display: none; }
+  }
+  @media (max-width: 640px) {
+    .content { padding: 14px; gap: 14px; }
+    .topbar { flex-wrap: wrap; padding: 10px 14px; }
+    .search-box { width: 100%; }
+    .update-meta { display: none; }
+    .kpi-value { font-size: 24px; }
+    .page-head h1 { font-size: 20px; }
+    .donut-wrap { flex-direction: column; align-items: stretch; }
+    #donutSvg { margin-inline: auto; }
+    .card-head { padding: 12px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ─── 侧边导航 ─────────────────────────────────────────────────── -->
+  <aside class="sidebar" data-od-id="sidebar">
+    <div class="side-brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-6 4 12 2.5-6H22"/></svg>
+      </span>
+      <span>
+        <span class="brand-name">观数</span>
+        <div class="brand-tag">Analytics</div>
+      </span>
+    </div>
+
+    <nav class="side-nav" aria-label="主导航">
+      <p class="side-label">分析</p>
+      <a href="#" class="active" aria-current="page" data-nav="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+        概览
+      </a>
+      <a href="#" data-nav="trend">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg>
+        访问趋势
+      </a>
+      <a href="#" data-nav="channel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 12V3.5a8.5 8.5 0 0 1 8.5 8.5z"/></svg>
+        渠道分析
+      </a>
+      <a href="#" data-nav="funnel">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18l-7 8.2V19l-4 2v-7.8z"/></svg>
+        转化漏斗
+      </a>
+      <a href="#" data-nav="user">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5c.7-3.2 2.9-4.7 5.5-4.7s4.8 1.5 5.5 4.7"/><path d="M15.5 5.2a3.2 3.2 0 0 1 0 5.6"/><path d="M17.2 14.9c2 .7 3.3 2.2 3.7 4.6"/></svg>
+        用户行为
+      </a>
+      <a href="#" data-nav="realtime">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6.5 4.5 13L17 12h4"/></svg>
+        实时监控
+      </a>
+      <a href="#" data-nav="retention">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.5l4 4-4 4"/><path d="M3 10.5V9a4 4 0 0 1 4-4h14"/><path d="M7 21.5l-4-4 4-4"/><path d="M21 13.5V15a4 4 0 0 1-4 4H3"/></svg>
+        留存分析
+      </a>
+      <p class="side-label">管理</p>
+      <a href="#" data-nav="events">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6.5h16M4 12h10M4 17.5h16"/></svg>
+        事件管理
+      </a>
+      <a href="#" data-nav="report">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M4 19.5h16"/></svg>
+        报表导出
+      </a>
+      <a href="#" data-nav="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M4.8 4.8l1.6 1.6M17.6 17.6l1.6 1.6M19.2 4.8l-1.6 1.6M6.4 17.6l-1.6 1.6"/></svg>
+        设置
+      </a>
+    </nav>
+
+    <div class="side-foot">
+      <span class="avatar" aria-hidden="true">苏</span>
+      <span>
+        <div class="side-user-name">苏晚晴</div>
+        <div class="side-user-role">管理员 · 华东区</div>
+      </span>
+    </div>
+  </aside>
+
+  <!-- ─── 主区 ─────────────────────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar" data-od-id="topbar">
+      <label class="search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>
+        <input type="search" placeholder="搜索页面、事件、用户…" aria-label="搜索" />
+      </label>
+      <div class="topbar-right">
+        <span class="pill-warn">演示环境 · 示例数据</span>
+        <span class="update-meta num" id="updateMeta">数据更新于 09:42</span>
+        <button class="icon-btn" id="refreshBtn" aria-label="刷新数据">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="exportBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v11"/><path d="M7 10l5 5 5-5"/><path d="M4 19.5h16"/></svg>
+          <span id="exportLabel">导出 CSV</span>
+        </button>
+        <span class="avatar" aria-hidden="true">苏</span>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- 页头 -->
+      <section class="page-head" data-od-id="page-head">
+        <div>
+          <h1>访问分析</h1>
+          <p class="meta">近 30 天 · 2026-05-09 至 2026-06-07 · 示例数据</p>
+        </div>
+        <div class="page-actions">
+          <span class="tag">UTC+8</span>
+          <button class="btn btn-secondary btn-sm" aria-label="选择日期范围">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            2026-05-09 ~ 06-07
+          </button>
+        </div>
+      </section>
+
+      <!-- KPI 行 -->
+      <section class="kpi-grid" data-od-id="kpi-row">
+        <article class="card kpi">
+          <div class="kpi-top">
+            <span class="kpi-label">总访问量</span>
+            <span class="pill-delta up">↑ 12.4%</span>
+          </div>
+          <div class="kpi-value num">128,436</div>
+          <div class="kpi-sub">较上期 <span class="num">+14,208</span> · 示例</div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 24 L9 22 L18 23 L27 19 L36 21 L45 16 L54 18 L63 13 L72 15 L81 10 L90 12 L100 7"/></svg>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top">
+            <span class="kpi-label">独立访客</span>
+            <span class="pill-delta up">↑ 8.1%</span>
+          </div>
+          <div class="kpi-value num">84,210</div>
+          <div class="kpi-sub">较上期 <span class="num">+6,312</span> · 示例</div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 22 L9 23 L18 20 L27 21 L36 18 L45 19 L54 15 L63 17 L72 13 L81 14 L90 10 L100 9"/></svg>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top">
+            <span class="kpi-label">平均停留时长</span>
+            <span class="pill-delta up">↑ 0:18</span>
+          </div>
+          <div class="kpi-value num">3:42</div>
+          <div class="kpi-sub">较上期 <span class="num">+8.8%</span> · 示例</div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 15 L9 14 L18 16 L27 13 L36 14 L45 12 L54 13 L63 10 L72 12 L81 9 L90 11 L100 8"/></svg>
+        </article>
+        <article class="card kpi">
+          <div class="kpi-top">
+            <span class="kpi-label">跳出率</span>
+            <span class="pill-delta up">↓ 1.8pt</span>
+          </div>
+          <div class="kpi-value num">38.6%</div>
+          <div class="kpi-sub">较上期 <span class="num">-1.8</span> 个百分点 · 示例</div>
+          <svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><path d="M0 9 L9 10 L18 8 L27 11 L36 10 L45 12 L54 10 L63 13 L72 11 L81 14 L90 12 L100 15"/></svg>
+        </article>
+      </section>
+
+      <!-- 趋势 + 渠道 -->
+      <div class="chart-grid">
+        <section class="card" data-od-id="trend">
+          <header class="card-head">
+            <div class="card-title">
+              <h2>访问趋势</h2>
+              <div class="meta">每日访问量 · 悬停查看数值 · 示例数据</div>
+            </div>
+            <div class="seg" role="group" aria-label="时间范围">
+              <button class="seg-btn" data-range="7d" aria-pressed="false">7 天</button>
+              <button class="seg-btn active" data-range="30d" aria-pressed="true">30 天</button>
+              <button class="seg-btn" data-range="90d" aria-pressed="false">90 天</button>
+            </div>
+          </header>
+          <div class="card-body chart-wrap">
+            <svg id="trendSvg" viewBox="0 0 720 260" role="img" aria-label="访问趋势折线图，示例数据"></svg>
+            <div class="tip" id="trendTip" role="tooltip"></div>
+          </div>
+        </section>
+
+        <section class="card" data-od-id="channels">
+          <header class="card-head">
+            <div class="card-title">
+              <h2>渠道占比</h2>
+              <div class="meta">按访问量 · 示例数据</div>
+            </div>
+          </header>
+          <div class="card-body donut-wrap">
+            <svg id="donutSvg" viewBox="0 0 160 160" role="img" aria-label="渠道占比环形图，示例数据"></svg>
+            <div class="donut-legend" id="donutLegend"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 落地页 + 渠道明细 -->
+      <div class="chart-grid">
+        <section class="card" data-od-id="top-pages">
+          <header class="card-head">
+            <div class="card-title">
+              <h2>热门落地页</h2>
+              <div class="meta">近 30 天 · 示例数据</div>
+            </div>
+            <a class="btn btn-ghost btn-sm btn-arrow" href="#">查看全部</a>
+          </header>
+          <div class="table-scroll">
+            <table class="ds-table" aria-label="热门落地页排名，示例数据">
+              <thead>
+                <tr>
+                  <th>页面路径</th>
+                  <th class="num-col">访问量</th>
+                  <th class="num-col">独立访客</th>
+                  <th class="num-col">平均停留</th>
+                  <th class="num-col">跳出率</th>
+                  <th>趋势</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="path">/pricing</td>
+                  <td class="num-col">21,480</td>
+                  <td class="num-col">15,204</td>
+                  <td class="num-col">3:12</td>
+                  <td class="num-col">34.2%</td>
+                  <td><span class="pill-delta up">↑ 上升</span></td>
+                </tr>
+                <tr>
+                  <td class="path">/</td>
+                  <td class="num-col">18,902</td>
+                  <td class="num-col">13,811</td>
+                  <td class="num-col">2:47</td>
+                  <td class="num-col">41.5%</td>
+                  <td><span class="pill-delta flat">— 平稳</span></td>
+                </tr>
+                <tr>
+                  <td class="path">/docs/quickstart</td>
+                  <td class="num-col">12,374</td>
+                  <td class="num-col">9,018</td>
+                  <td class="num-col">4:05</td>
+                  <td class="num-col">28.9%</td>
+                  <td><span class="pill-delta up">↑ 上升</span></td>
+                </tr>
+                <tr>
+                  <td class="path">/blog/2026/05/数据驱动增长</td>
+                  <td class="num-col">8,210</td>
+                  <td class="num-col">6,423</td>
+                  <td class="num-col">3:26</td>
+                  <td class="num-col">37.8%</td>
+                  <td><span class="pill-delta flat">— 平稳</span></td>
+                </tr>
+                <tr>
+                  <td class="path">/login</td>
+                  <td class="num-col">6,054</td>
+                  <td class="num-col">4,998</td>
+                  <td class="num-col">1:12</td>
+                  <td class="num-col">62.4%</td>
+                  <td><span class="pill-delta down">↓ 下降</span></td>
+                </tr>
+                <tr>
+                  <td class="path">/integrations</td>
+                  <td class="num-col">4,877</td>
+                  <td class="num-col">3,420</td>
+                  <td class="num-col">3:58</td>
+                  <td class="num-col">31.6%</td>
+                  <td><span class="pill-delta up">↑ 上升</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" data-od-id="channel-detail">
+          <header class="card-head">
+            <div class="card-title">
+              <h2>渠道明细</h2>
+              <div class="meta">近 30 天 · 示例数据</div>
+            </div>
+          </header>
+          <div class="cd-list" id="channelDetail"></div>
+        </section>
+      </div>
+
+      <footer class="foot-meta">示例数据 · 每 15 分钟自动刷新 · 最后更新 2026-06-07 09:42:00</footer>
+    </main>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── 通用工具 ─────────────────────────────────────────────── */
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+  function dateLabelsFrom(y, m, d, n, step) {
+    var out = [], dt = new Date(y, m, d);
+    for (var i = 0; i < n; i++) {
+      out.push(pad(dt.getMonth() + 1) + '/' + pad(dt.getDate()));
+      dt.setDate(dt.getDate() + step);
+    }
+    return out;
+  }
+
+  /* ── 趋势图 ───────────────────────────────────────────────── */
+  var DATASETS = {
+    '7d':  {
+      points: [6220, 6410, 6580, 6390, 6710, 6940, 6820],
+      labels: dateLabelsFrom(2026, 5, 1, 7, 1)
+    },
+    '30d': {
+      points: [3980, 4210, 4050, 4320, 4560, 4410, 4680, 4820, 4600, 4910,
+               5140, 4970, 5230, 5410, 5280, 5560, 5730, 5490, 5810, 6020,
+               5840, 6110, 6340, 6180, 6420, 6600, 6380, 6710, 6940, 6820],
+      labels: dateLabelsFrom(2026, 4, 9, 30, 1)
+    },
+    '90d': {
+      points: [4120, 4380, 4510, 4720, 4890, 5120, 4980, 5340, 5610, 5480, 5910, 6340, 6820],
+      labels: dateLabelsFrom(2026, 2, 10, 13, 7)
+    }
+  };
+  var W = 720, H = 260, PL = 46, PR = 16, PT = 16, PB = 26;
+  var svg = document.getElementById('trendSvg');
+  var tip = document.getElementById('trendTip');
+  var cur = null;
+
+  function niceMax(v) {
+    var steps = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    var mag = Math.pow(10, Math.floor(Math.log(v) / Math.LN10));
+    var n = v / mag;
+    for (var i = 0; i < steps.length; i++) { if (n <= steps[i]) return steps[i] * mag; }
+    return 10 * mag;
+  }
+  function fmtNum(v) { return v >= 1000 ? (Math.round(v / 100) / 10) + 'k' : String(v); }
+
+  function renderTrend(key) {
+    var ds = DATASETS[key];
+    var pts = ds.points, labs = ds.labels, n = pts.length;
+    var maxV = niceMax(Math.max.apply(null, pts));
+    var iw = W - PL - PR, ih = H - PT - PB;
+    function X(i) { return PL + iw * (i / (n - 1)); }
+    function Y(v) { return PT + ih - (v / maxV) * ih; }
+
+    var line = '', area = '', i;
+    for (i = 0; i < n; i++) {
+      line += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(pts[i]).toFixed(1) + ' ';
+    }
+    area = line + 'L' + X(n - 1).toFixed(1) + ' ' + (PT + ih) + ' L' + X(0).toFixed(1) + ' ' + (PT + ih) + ' Z';
+
+    var grid = '', ylabels = '', k;
+    for (k = 0; k < 5; k++) {
+      var v = maxV * k / 4, yy = Y(v);
+      grid += '<line x1="' + PL + '" y1="' + yy.toFixed(1) + '" x2="' + (W - PR) + '" y2="' + yy.toFixed(1) + '" class="chart-gridline"/>';
+      ylabels += '<text x="' + (PL - 8) + '" y="' + (yy + 3.5).toFixed(1) + '" class="chart-ylab">' + fmtNum(v) + '</text>';
+    }
+    var xlabIdx = [0, Math.round((n - 1) / 4), Math.round((n - 1) / 2), Math.round(3 * (n - 1) / 4), n - 1];
+    var seen = {}, xlabels = '';
+    xlabIdx.forEach(function (idx) {
+      if (seen[idx]) return;
+      seen[idx] = 1;
+      xlabels += '<text x="' + X(idx).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle" class="chart-xlab">' + labs[idx] + '</text>';
+    });
+    var ptsHtml = '';
+    for (i = 0; i < n; i++) {
+      ptsHtml += '<circle class="pt" data-i="' + i + '" cx="' + X(i).toFixed(1) + '" cy="' + Y(pts[i]).toFixed(1) + '" r="' + (n <= 8 ? 3.5 : 2.5) + '"/>';
+    }
+    svg.innerHTML =
+      '<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" style="stop-color:var(--accent);stop-opacity:0.16"/>' +
+      '<stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/>' +
+      '</linearGradient></defs>' +
+      '<line id="guide" class="chart-guide" x1="0" y1="' + PT + '" x2="0" y2="' + (PT + ih) + '" opacity="0"/>' +
+      grid + ylabels + xlabels +
+      '<path class="chart-area" d="' + area + '"/>' +
+      '<path class="chart-line" d="' + line + '"/>' +
+      ptsHtml;
+    cur = { pts: pts, labs: labs, X: X, Y: Y };
+    tip.style.display = 'none';
+  }
+
+  svg.addEventListener('mousemove', function (ev) {
+    if (!cur) return;
+    var rect = svg.getBoundingClientRect();
+    var vx = (ev.clientX - rect.left) / rect.width * W;
+    var best = 0, bd = 1e9, i;
+    for (i = 0; i < cur.pts.length; i++) {
+      var d = Math.abs(cur.X(i) - vx);
+      if (d < bd) { bd = d; best = i; }
+    }
+    var ptsEls = svg.querySelectorAll('.pt');
+    for (i = 0; i < ptsEls.length; i++) { ptsEls[i].classList.toggle('pt-hot', i === best); }
+    var g = document.getElementById('guide');
+    g.setAttribute('x1', cur.X(best).toFixed(1));
+    g.setAttribute('x2', cur.X(best).toFixed(1));
+    g.setAttribute('opacity', '1');
+    tip.style.display = 'block';
+    var px = cur.X(best) / W * rect.width;
+    var py = cur.Y(cur.pts[best]) / H * rect.height;
+    var tw = tip.offsetWidth || 132;
+    tip.style.left = Math.max(4, Math.min(px + 12, rect.width - tw - 8)) + 'px';
+    tip.style.top = Math.max(4, py - 14) + 'px';
+    tip.innerHTML = '<div class="tip-date">' + cur.labs[best] + '</div>' +
+      '<div class="tip-val"><span class="tip-dot"></span>' + cur.pts[best].toLocaleString('zh-CN') + ' 次访问</div>';
+  });
+  svg.addEventListener('mouseleave', function () {
+    tip.style.display = 'none';
+    var g = document.getElementById('guide');
+    if (g) g.setAttribute('opacity', '0');
+    var hot = svg.querySelectorAll('.pt-hot');
+    for (var i = 0; i < hot.length; i++) hot[i].classList.remove('pt-hot');
+  });
+
+  var segBtns = document.querySelectorAll('.seg-btn[data-range]');
+  segBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      segBtns.forEach(function (x) { x.classList.remove('active'); x.setAttribute('aria-pressed', 'false'); });
+      b.classList.add('active');
+      b.setAttribute('aria-pressed', 'true');
+      renderTrend(b.getAttribute('data-range'));
+    });
+  });
+
+  /* ── 渠道环形图 + 明细 ────────────────────────────────────── */
+  var CH = [
+    { name: '自然搜索', share: 42.8, val: '54,924', delta: '+2.1pt', up: true,  cls: 'ch-1' },
+    { name: '直接访问', share: 23.1, val: '29,648', delta: '-0.4pt', up: false, cls: 'ch-2' },
+    { name: '社交媒体', share: 12.6, val: '16,174', delta: '-1.2pt', up: false, cls: 'ch-3' },
+    { name: '外链',     share: 9.4,  val: '12,063', delta: '+0.6pt', up: true,  cls: 'ch-4' },
+    { name: '邮件',     share: 7.2,  val: '9,241',  delta: '+0.3pt', up: true,  cls: 'ch-5' },
+    { name: '付费广告', share: 4.9,  val: '6,289',  delta: '-1.4pt', up: false, cls: 'ch-6' }
+  ];
+  var donutSvg = document.getElementById('donutSvg');
+
+  function renderDonut() {
+    var C = 2 * Math.PI * 58, cum = 0, segs = '';
+    CH.forEach(function (ch, i) {
+      var len = ch.share / 100 * C;
+      var off = cum * 3.6 - 90;
+      segs += '<circle class="dseg" data-i="' + i + '" cx="80" cy="80" r="58" style="stroke:var(--' + ch.cls + ')" ' +
+        'stroke-dasharray="' + Math.max(len - 2, 0.5).toFixed(2) + ' ' + C.toFixed(2) + '" ' +
+        'transform="rotate(' + off + ' 80 80)"/>';
+      cum += ch.share;
+    });
+    var top = CH[0];
+    donutSvg.innerHTML = segs +
+      '<text x="80" y="74" text-anchor="middle" class="donut-big num">' + top.share + '%</text>' +
+      '<text x="80" y="94" text-anchor="middle" class="donut-small">' + top.name + '</text>';
+
+    var lg = document.getElementById('donutLegend');
+    lg.innerHTML = CH.map(function (ch) {
+      return '<div class="dl-row"><span class="dl-dot" style="background:var(--' + ch.cls + ')"></span>' +
+        '<span class="dl-name">' + ch.name + '</span>' +
+        '<span class="dl-share num">' + ch.share.toFixed(1) + '%</span></div>';
+    }).join('');
+
+    var segsEls = donutSvg.querySelectorAll('.dseg');
+    var rows = lg.querySelectorAll('.dl-row');
+    function sync(i) {
+      segsEls.forEach(function (s, k) { s.classList.toggle('dseg-hot', k === i); });
+      rows.forEach(function (r, k) { r.classList.toggle('dl-hot', k === i); });
+    }
+    segsEls.forEach(function (s) {
+      s.addEventListener('mouseenter', function () { sync(Number(s.getAttribute('data-i'))); });
+    });
+    rows.forEach(function (r) {
+      r.addEventListener('mouseenter', function () { sync(Number(r.getAttribute('data-i'))); });
+    });
+    donutSvg.addEventListener('mouseleave', function () { sync(-1); });
+    lg.addEventListener('mouseleave', function () { sync(-1); });
+
+    var detail = document.getElementById('channelDetail');
+    detail.innerHTML = CH.map(function (ch) {
+      return '<div class="cd-row">' +
+        '<div class="cd-top">' +
+          '<span class="dl-dot" style="background:var(--' + ch.cls + ')"></span>' +
+          '<span class="cd-name">' + ch.name + '</span>' +
+          '<span class="cd-share num">' + ch.share.toFixed(1) + '%</span>' +
+          '<span class="pill-delta ' + (ch.up ? 'up' : 'down') + '">' + (ch.up ? '↑ ' : '↓ ') + ch.delta + '</span>' +
+        '</div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + ch.share + '%;background:var(--' + ch.cls + ')"></div></div>' +
+        '<div class="cd-meta"><span class="num">' + ch.val + '</span> 次访问</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ── 顶栏交互 ─────────────────────────────────────────────── */
+  var refreshBtn = document.getElementById('refreshBtn');
+  var updateMeta = document.getElementById('updateMeta');
+  refreshBtn.addEventListener('click', function () {
+    var icon = refreshBtn.querySelector('svg');
+    icon.classList.remove('spin');
+    void icon.offsetWidth;
+    icon.classList.add('spin');
+    var now = new Date();
+    updateMeta.textContent = '数据更新于 ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+  });
+
+  var exportBtn = document.getElementById('exportBtn');
+  var exportLabel = document.getElementById('exportLabel');
+  exportBtn.addEventListener('click', function () {
+    exportLabel.textContent = '已导出';
+    setTimeout(function () { exportLabel.textContent = '导出 CSV'; }, 1400);
+  });
+
+  /* ── 侧边导航 ─────────────────────────────────────────────── */
+  document.querySelectorAll('.side-nav a').forEach(function (a) {
+    a.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      document.querySelectorAll('.side-nav a').forEach(function (x) {
+        x.classList.remove('active');
+        x.removeAttribute('aria-current');
+      });
+      a.classList.add('active');
+      a.setAttribute('aria-current', 'page');
+    });
+  });
+
+  /* ── 初始化 ───────────────────────────────────────────────── */
+  renderTrend('30d');
+  renderDonut();
+})();
+</script>
+</body>
+</html>

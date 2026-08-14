@@ -71,10 +71,10 @@ const STYLE = `
 function page(inner, title) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${esc(title)} · pure-open-design</title>
+<title>${esc(title)} · Pure Design</title>
 <style>${STYLE}</style></head>
 <body><header>
-  <h1>pure-open-design</h1>
+  <h1>Pure Design</h1>
   <div class="sub">内置 Pi 基座的 UI 设计 agent · 提示词 → 自包含 HTML</div>
 </header>
 <nav class="top"><a href="/">设计</a><a href="/gallery">画廊</a></nav>
@@ -285,6 +285,6 @@ http.createServer(async (req, res) => {
   res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
   res.end('404 Not Found');
 }).listen(PORT, HOST, () => {
-  console.log(`✓ pure-open-design 已启动: http://${HOST}:${PORT}/`);
+  console.log(`✓ Pure Design 已启动: http://${HOST}:${PORT}/`);
   console.log(`  本地访问（SSH 转发后）: ssh -N -L ${PORT}:127.0.0.1:${PORT} <你的服务器>  →  http://127.0.0.1:${PORT}/`);
 });

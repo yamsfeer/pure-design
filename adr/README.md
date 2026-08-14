@@ -1,6 +1,6 @@
 # Architecture Decision Records (ADR)
 
-本目录记录 `pure-open-design` 的架构决策。核心背景:从上游 [open-design](https://github.com/nexu-io/open-design) 提取"纯粹设计"能力,砍掉 Electron/鉴权/云服务等外围设施。
+本目录记录 `pure-design` 的架构决策。核心背景:从上游 [open-design](https://github.com/nexu-io/open-design) 提取"纯粹设计"能力,砍掉 Electron/鉴权/云服务等外围设施。
 
 另见 [glossary.md](glossary.md) —— 我们约定的共同语言(专有名词表)。
 

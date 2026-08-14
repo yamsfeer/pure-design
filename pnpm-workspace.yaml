@@ -3,4 +3,4 @@ allowBuilds:
   '@google/genai': false
   protobufjs: false
 overrides:
-  pure-open-design: 'link:'
+  pure-design: 'link:'

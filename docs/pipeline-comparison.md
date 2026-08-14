@@ -1,4 +1,4 @@
-# 管线对照:上游 OpenDesign vs 我们的 pure-open-design
+# 管线对照:上游 OpenDesign vs 我们的 Pure Design
 
 本文档对照两条"从提示词到 HTML"的管线,记录每一步的**决策**与**差异**。决策的正式记录见 `adr/`,共同语言见 `adr/glossary.md`。
 

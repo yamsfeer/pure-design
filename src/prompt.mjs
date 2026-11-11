@@ -16,11 +16,21 @@ export const DIRECTIONS_DIR = 'assets/directions';
 export const TEMPLATE_ALIASES = { web: 'web-prototype', mobile: 'mobile-app' };
 export const resolveTemplate = (name) => TEMPLATE_ALIASES[name] || name;
 
-const DEFAULT_CRAFT = ['typography', 'color', 'anti-ai-slop', 'accessibility-baseline'];
-const CRAFT_BY_TEMPLATE = {
-  dashboard: ['state-coverage', 'accessibility-baseline', 'laws-of-ux'],
-  'mobile-app': ['typography', 'color', 'anti-ai-slop', 'state-coverage', 'accessibility-baseline'],
+/* craft 注入策略：只注入「写的时候必须照着做」的短规则。
+ * accessibility-baseline(12.9K) / laws-of-ux(17.3K) / rtl-and-bidi(12.2K) 是参考资料，
+ * 全量塞进系统提示词每轮都要付 token，收益却很低 —— 改成按需 read（见 loopInstructions），
+ * 其要点压缩成 OUTPUT_CONTRACT 里的可执行清单。
+ */
+export const DEFAULT_CRAFT = ['typography', 'color', 'anti-ai-slop'];
+export const CRAFT_BY_TEMPLATE = {
+  dashboard: ['state-coverage', 'color', 'anti-ai-slop'],
+  'mobile-app': ['typography', 'color', 'anti-ai-slop', 'state-coverage'],
+  'simple-deck': ['typography', 'anti-ai-slop'],
+  'replit-deck': ['typography', 'anti-ai-slop'],
 };
+
+/* 参考资料：不默认注入，由 agent 按需 read（避免每轮 40K 字符的固定开销） */
+export const ON_DEMAND_CRAFT = ['accessibility-baseline', 'laws-of-ux', 'rtl-and-bidi', 'form-validation', 'animation-discipline', 'typography-hierarchy', 'typography-hierarchy-editorial'];
 export const craftFor = (tpl) => CRAFT_BY_TEMPLATE[tpl] || DEFAULT_CRAFT;
 
 export function stripFrontmatter(s) {
@@ -42,6 +52,7 @@ export const OUTPUT_CONTRACT = `
 - 如果用户提示词是中文，界面文案必须用中文。
 - 不得编造虚构数据/指标；示例数据要明确标注为示例或占位。
 - 界面必须有真实可用的状态：悬停、聚焦、按钮点击反馈；移动端宽度下不横向溢出。
+- 无障碍基线（写的时候就照做，不要事后补）：正文对比度 ≥ 4.5:1；键盘可达 + 可见 :focus-visible；交互目标 ≥ 44×44px；图片有 alt（装饰图 alt=""）；尊重 prefers-reduced-motion。
 `;
 
 export function buildSystemPrompt({ system, template, taste, direction, skill = 'frontend-design' }) {
@@ -70,6 +81,16 @@ export function buildSystemPrompt({ system, template, taste, direction, skill = 
     sys.push(`\n---\n# 当前视觉方向：${direction}（覆盖设计系统的配色/字体，:root 值照抄，不要即兴发挥）\n\n${readFileSync(dMd, 'utf8')}`);
   }
 
+  sys.push(`
+---
+# 指令优先级（冲突时按此裁决，不要自行发明第三条路）
+
+1. **输出契约**（本提示词末尾）—— 硬约束，任何情况下不得违背。
+2. **设计系统 ${system}** —— 品牌契约。用户点名了品牌（system ≠ default）时，颜色/字体/组件一律以它为准。
+3. **视觉方向 ${direction || '（未选）'}** —— 负责版式气质、间距节奏、字体搭配${system === 'default' ? '；未指定品牌时，配色也由方向决定' : '；与设计系统配色冲突时，配色让位给设计系统'}。
+4. **skill / craft 的通用规则** —— 兜底审美与工艺，被上面三层覆盖的部分以降级处理。
+`);
+
   sys.push('\n---\n# 工艺参考（craft）\n');
   for (const c of craftFor(tpl)) {
     sys.push(`\n### ${c}\n${readRel(`${CRAFT_DIR}/${c}.md`)}`);
@@ -81,14 +102,27 @@ export function buildSystemPrompt({ system, template, taste, direction, skill = 
   }
   sys.push('\n---\n# 渲染模板契约\n\n' + stripFrontmatter(readRel(`${TEMPLATES_DIR}/${tpl}/SKILL.md`)));
 
-  for (const [label, rel] of [
-    ['种子模板（template.html）—— 以此为页面骨架，保留它的 class 系统与 CSS 变量', 'assets/template.html'],
-    ['布局库（layouts.md）—— 从这里面选区块骨架，不要凭空造', 'references/layouts.md'],
-    ['自检清单（checklist.md）—— 交付前逐条自检', 'references/checklist.md'],
+  const seedPath = join(tdir, 'assets/template.html');
+  const examplePath = join(tdir, 'example.html');
+  for (const [label, p] of [
+    ['种子模板（template.html）—— 以此为页面骨架，保留它的 class 系统与 CSS 变量', seedPath],
+    ['布局库（layouts.md）—— 从这里面选区块骨架，不要凭空造', join(tdir, 'references/layouts.md')],
+    ['自检清单（checklist.md）—— 交付前逐条自检', join(tdir, 'references/checklist.md')],
+    ['参考成品（example.html）—— 只学它的版式、密度与节奏，文案与配色按本次 brief 重写，不要照抄', examplePath],
   ]) {
-    const p = join(tdir, rel);
+    // 种子只在该模板真有种子时注入；没有种子时用参考成品兜底（旧版会静默跳过，模型只能凭空造）
+    if (label.startsWith('种子模板') && !existsSync(seedPath) && existsSync(examplePath)) continue;
     if (existsSync(p)) sys.push(`\n---\n# ${label}\n\n${readFileSync(p, 'utf8')}`);
   }
+
+  sys.push(`
+---
+# 需要时再读的参考资料（按需，不要一次全读）
+
+如果这一版涉及以下主题，用 read 工具读对应文件再改，不要凭印象写：
+
+${ON_DEMAND_CRAFT.map((c) => `- ${CRAFT_DIR}/${c}.md`).join('\n')}
+`);
 
   sys.push(OUTPUT_CONTRACT);
   return sys.join('\n');

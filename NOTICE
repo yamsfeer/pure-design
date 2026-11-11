@@ -1,0 +1,14 @@
+Pure Design
+Copyright 2026 yamsfeer
+
+This product includes design assets (skills, design systems, design templates,
+craft references, directions and prompt templates) extracted from OpenDesign
+(https://github.com/nexu-io/open-design), Copyright the OpenDesign contributors,
+licensed under the Apache License, Version 2.0.
+
+The extracted assets live under assets/ and are redistributed unmodified except
+for path relocations. Any file-level attribution inside those files (for example
+skills adapted from third-party sources) remains in place and takes precedence.
+
+Modifications made by this repository (CLI, prompt assembly, deterministic lint,
+visual checks, catalog generator) are also licensed under Apache-2.0.

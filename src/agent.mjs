@@ -20,6 +20,7 @@ import { join, dirname, basename, extname, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
 import { buildSystemPrompt, ROOT } from './prompt.mjs';
 import { lintHtml, renderFindingsForAgent } from './lint.mjs';
+import { visualCheck } from './visual-check.mjs';
 
 /* ─── 密钥：DEEPSEEK_API_KEY 或从 ~/.pi/agent/auth.json 兜底 ─────────────── */
 export function ensureKey() {
@@ -48,21 +49,26 @@ const GRILLING_PREAMBLE = `
 /* ─── agent 循环协议（追加到系统提示词末尾） ─────────────────────────────── */
 function loopInstructions(outPath) {
   return `
-# 工作方式（agent 循环 — 必须迭代到满意才停，禁止一次交付）
+# 工作方式（agent 循环 — 迭代到满意才停）
 
 你可用的工具：read（读文件）、write（写文件）、edit（精确改文件）、bash（执行命令）。
-注意：种子模板、区块库、自检清单、DESIGN.md 已经完整注入到本系统提示词里，无需再 read。
+种子模板、区块库、自检清单、DESIGN.md 已完整注入本提示词，无需再 read。
+「需要时再读的参考资料」按需 read，不要一次全读。
 
 1. 理解 brief，确定单一视觉方向。
-2. 用 write 工具把**完整的自包含 HTML** 写入 ${outPath}（每次都写整页，覆盖写）。
-3. 写完后，用上面「自检清单」逐条审查这一版；任何 P0 未通过 → 用 write 或 edit 修改。
-4. 反复「审查 → 重写」，直到所有 P0 通过、P1 尽量通过，且连续两版之间没有实质改进。
-5. 满意后，用文字输出一段简短总结（文件路径、视觉方向、做了几轮精修）。**不要输出 HTML 源码。**
+2. 第 1 版：用 write 写**完整的自包含 HTML** 到 ${outPath}。
+3. 每次落盘后，工具会返回两类**程序实测结果**（不是模型自评）：
+   - 反 AI 味 lint（字符串规则）
+   - 视觉自检（真浏览器在 390/1440 下量溢出、对比度、触控目标、标题层级）
+   P0 必须修；P1 尽量修；P2 酌情。修的时候**用 edit 做局部替换**（改一个 section / 一段 CSS），
+   不要整页重写 —— 整页重写既慢又容易把已经对的部分改坏。只有结构性问题才回退到 write。
+4. 修完再看一遍工具返回（下一轮会重新实测），直到 P0 清零。
+5. 满意后输出一段简短总结（文件路径、视觉方向、几轮、还剩哪些已知 P2）。**不要输出 HTML 源码。**
 
 约束：
-- 每次 write 都写完整页面，禁止写片段或 "同上"。
-- 若某轮重写反而更差，回退到之前更好的一版（重新写回它）。
-- 通常 2–4 轮即可；达到满意即可，不必硬凑轮数。
+- 用 write 时必须写完整页面，禁止片段或 "同上"。
+- 若某轮改得更差，用 edit 回退到之前更好的写法。
+- 通常 2–4 轮；P0 清零即可收，不必硬凑轮数。
 `;
 }
 
@@ -71,7 +77,7 @@ function loopInstructions(outPath) {
  * 而裸 Agent 循环只传 4 参（没有 env）。这里用 NodeExecutionEnv 提供文件系统 + shell + cwd，
  * 并在 write/edit 上叠一层「轮数硬闸门」：超过 maxRounds 就拒绝写入，逼模型收尾。
  * ─────────────────────────────────────────────────────────────────────────── */
-function assembleTools({ maxRounds, state }) {
+function assembleTools({ maxRounds, state, outFile, visual = true }) {
   const env = new NodeExecutionEnv({ cwd: ROOT });
 
   // 写后取回本次写入/改动的 HTML 内容（用于确定性 lint）。
@@ -100,6 +106,15 @@ function assembleTools({ maxRounds, state }) {
         if (html) {
           const findings = lintHtml(html);
           if (findings.length) result.content.push({ type: 'text', text: renderFindingsForAgent(findings) });
+        }
+        // 视觉自检：真浏览器量布局（只对目标产物跑，写别的文件时跳过）
+        const target = typeof params?.path === 'string' ? params.path : '';
+        if (visual && outFile && (target === outFile || target.endsWith(outFile))) {
+          state.visualRuns += 1;
+          const vf = await visualCheck(outFile).catch(() => []);
+          if (vf.length) {
+            result.content.push({ type: 'text', text: '（以上是字符串 lint；以下是**视觉自检**，由真浏览器在 390/1440 宽度实测）\n\n' + renderFindingsForAgent(vf) });
+          }
         }
       }
       return result;
@@ -161,7 +176,9 @@ function isTransientError(e) {
 /* ─── 会话核心（单一 agent 贯穿澄清 → 设计，见 adr/0001）────────────────────── */
 export function createSession({ system = 'default', template = 'web', direction, out = null, skill,
                                 prompt = null, maxRounds = 6, taste = false, modelId = 'deepseek-v4-flash',
-                                thinkingLevel = 'high', clarify = false, onEvent, outDir } = {}) {
+                                thinkingLevel = process.env.PURE_DESIGN_THINKING || 'medium',
+                                visual = process.env.PURE_DESIGN_VISUAL !== '0',
+                                clarify = false, onEvent, outDir } = {}) {
   ensureKey();
   if (!process.env.DEEPSEEK_API_KEY) throw new Error('未找到 DeepSeek 凭据（设置 DEEPSEEK_API_KEY）');
 
@@ -176,8 +193,8 @@ export function createSession({ system = 'default', template = 'web', direction,
   const outPath = file.startsWith(ROOT + '/') ? file.slice(ROOT.length + 1) : file;
   const systemPrompt = (clarify ? GRILLING_PREAMBLE : '') + buildSystemPrompt({ system, template, taste, direction, skill }) + loopInstructions(outPath);
 
-  const state = { writes: 0 };
-  const tools = assembleTools({ maxRounds, state });
+  const state = { writes: 0, visualRuns: 0 };
+  const tools = assembleTools({ maxRounds, state, outFile: file, visual });
   const agent = new Agent({
     initialState: { systemPrompt, model, tools, thinkingLevel },
     streamFn: models.streamSimple.bind(models),
@@ -223,7 +240,11 @@ export function createSession({ system = 'default', template = 'web', direction,
     if (phase === 'done') {
       emit('done', { file, summary: turnText.trim(), rounds: state.writes, valid: v ? v.ok : undefined, validReason: v && !v.ok ? v.reason : null });
     }
-    return { phase, text: turnText.trim(), rounds: Math.min(state.writes, maxRounds), valid: v ? v.ok : undefined, validReason: v && !v.ok ? v.reason : null };
+    return {
+      phase, text: turnText.trim(), rounds: Math.min(state.writes, maxRounds),
+      valid: v ? v.ok : undefined, validReason: v && !v.ok ? v.reason : null,
+      visualRuns: state.visualRuns,
+    };
   }
 
   return { send, file, outname, dispose: () => { try { agent.abort(); } catch {} } };

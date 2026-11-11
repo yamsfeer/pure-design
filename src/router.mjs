@@ -18,41 +18,10 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, readRel } from './prompt.mjs';
 
-/* ─── 任务类型 → 模板 / skill 候选（两级选择的第一级，程序预筛）────────────── */
-export const TASK_TYPES = {
-  web: {
-    label: 'Web 落地页/营销页',
-    templates: ['web-prototype', 'saas-landing', 'waitlist-page', 'pricing-page'],
-    skills: ['frontend-design', 'taste-skill', 'copywriting', 'marketing-psychology'],
-  },
-  dashboard: {
-    label: 'Dashboard / 数据工具',
-    templates: ['dashboard', 'live-dashboard', 'github-dashboard', 'kanban-board'],
-    skills: ['frontend-design', 'd3-visualization', 'data-report'],
-  },
-  mobile: {
-    label: '移动端界面',
-    templates: ['mobile-app', 'mobile-onboarding'],
-    skills: ['frontend-design', 'swiftui-design', 'imagegen-frontend-mobile'],
-  },
-  deck: {
-    label: '演示文稿 / Deck',
-    templates: ['simple-deck', 'html-ppt', 'replit-deck', 'kami-deck'],
-    skills: ['deck-open-slide-canvas', 'frontend-slides'],
-  },
-  editorial: {
-    label: '编辑/杂志风页面',
-    templates: ['web-prototype', 'magazine-poster', 'blog-post'],
-    skills: ['frontend-design', 'taste-skill', 'copywriting'],
-  },
-  brand: {
-    label: '品牌页 / 作品集',
-    templates: ['web-prototype', 'open-design-landing', 'portoflio'],
-    skills: ['brand-extract', 'brand-guidelines', 'design-md', 'frontend-design'],
-  },
-};
-
-const TASK_KEYS = Object.keys(TASK_TYPES);
+/* ─── 候选表：唯一事实源在 src/task-types.mjs ─────────────────────────── */
+import {
+  TASK_TYPES, TASK_KEYS, skillCandidatesFor, templateCandidatesFor, normalizeDecision,
+} from './task-types.mjs';
 
 /* ─── 方向索引：从 assets/directions/*.md 提取一句话描述 ─────────────────── */
 export function directionIndex() {
@@ -78,30 +47,32 @@ export function designSystemIndex() {
     const md = join(dir, d.name, 'DESIGN.md');
     let cat = '', desc = '';
     try {
-      const txt = readFileSync(md, 'utf8').slice(0, 600);
+      const full = readFileSync(md, 'utf8');
+      const txt = full.slice(0, 600);
       // 提取所有引用行（> xxx），Category 单独分流，其余取第一行作描述
       const quoteLines = [...txt.matchAll(/^>\s*(.+)$/gm)].map((m) => m[1]).filter(Boolean);
       cat = quoteLines.find((l) => l.startsWith('Category:'))?.replace(/^Category:\s*/, '') || '';
       desc = quoteLines.find((l) => !l.startsWith('Category:')) || '';
+      // 少数系统没有 '>' 元数据（如 totality-festival），退化为标题 + 首段正文，
+      // 否则它会从索引里消失，品牌匹配永远命中不到。
+      if (!cat && !desc) {
+        const title = (txt.match(/^#\s+(.+)$/m) || [])[1] || '';
+        const para = txt.split('\n').map((l) => l.trim())
+          .find((l) => l && !l.startsWith('#') && !l.startsWith('>') && !l.startsWith('|') && !l.startsWith('```')) || '';
+        desc = (title ? title + ' — ' : '') + para;
+        cat = cat || 'uncategorized';
+      }
     } catch { /* 无 DESIGN.md 跳过 */ }
     if (cat || desc) out.push({ id: d.name, cat, desc });
   }
   return out;
 }
 
-/* ─── skill 两级选择的第一级：程序按 taskType 预筛 ───────────────────────── */
-export function skillCandidatesFor(taskType) {
-  const t = TASK_TYPES[taskType];
-  if (!t) return TASK_TYPES.web.skills;
-  // 保证核心 skill 总在候选里
-  const base = ['frontend-design'];
-  return [...new Set([...base, ...t.skills])];
-}
 
 /* ─── 决策系统提示词（注入路由规则 + 方向索引 + skill 候选 + 提问规则） ────── */
 export function buildRoutePrompt({ prompt, system = 'default', taskType, dsIndex, dirIndex, skillCands }) {
   const taskLines = TASK_KEYS
-    .map((k) => `- ${k}（${TASK_TYPES[k].label}）：模板 ${TASK_TYPES[k].templates[0]}；skill 候选 ${skillCandsFor(k)}`)
+    .map((k) => `- ${k}（${TASK_TYPES[k].label}）：模板 ${templateCandidatesFor(k).join(' / ')}；skill 候选 ${skillCandidatesFor(k).join(', ')}`)
     .join('\n');
   const dirLines = dirIndex.map((d) => `- ${d.id}（${d.title}）：${d.mood}`).join('\n');
   const dsLines = dsIndex.map((d) => `- ${d.id}${d.cat ? `（${d.cat}）` : ''}: ${d.desc}`).join('\n');
@@ -168,9 +139,6 @@ JSON 键值说明：
 - reason: 简短理由，展示给用户看`;
 }
 
-function skillCandsFor(taskType) {
-  return skillCandidatesFor(taskType).join(', ');
-}
 
 /* ─── 解析 <decision> 块 ─────────────────────────────────────────────────── */
 export function parseDecision(text) {
@@ -190,7 +158,7 @@ export function parseDecision(text) {
 }
 
 /* ─── 决策会话：直连 DeepSeek（OpenAI 兼容），单 agent 会话贯穿澄清 → 决策 ── */
-export async function runRouter({ prompt, system = 'default', onEvent } = {}) {
+export async function runRouter({ prompt, system = 'default', model, onEvent } = {}) {
   // 复用 agent.mjs 的凭据兜底（环境变量 → ~/.pi/agent/auth.json）
   const { ensureKey } = await import('./agent.mjs');
   ensureKey();
@@ -215,19 +183,19 @@ export async function runRouter({ prompt, system = 'default', onEvent } = {}) {
   while (rounds < 5) {
     rounds++;
     emit('status', { message: `决策第 ${rounds} 轮…` });
-    const res = await callDeepSeek({ apiKey, systemPrompt, conversation });
+    const res = await callDeepSeek({ apiKey, systemPrompt, conversation, model });
     const text = res;
     emit('text', { delta: text });
 
     const decision = parseDecision(text);
     if (decision) {
-      // 校验并规范化
-      if (!TASK_KEYS.includes(decision.taskType)) decision.taskType = taskType;
-      if (!decision.direction) decision.direction = 'modern-minimal';
-      if (!decision.skill) decision.skill = 'frontend-design';
-      if (!decision.template) decision.template = TASK_TYPES[decision.taskType]?.templates[0] || 'web-prototype';
-      if (!decision.designSystem) decision.designSystem = system;
-      return decision;
+      // 模型可能给出不存在的资产 id：逐级回退，而不是让 buildSystemPrompt 抛错（ADR 修订）
+      const norm = normalizeDecision(
+        { direction: 'modern-minimal', ...decision, taskType: decision.taskType || taskType },
+        { system },
+      );
+      if (norm.direction !== decision.direction) norm.reason = `${norm.reason || ''}（方向 ${decision.direction} 不可用，已回退）`.trim();
+      return norm;
     }
 
     // 没输出 decision → 是提问/追问，交给用户回答
@@ -239,21 +207,25 @@ export async function runRouter({ prompt, system = 'default', onEvent } = {}) {
   throw new Error('决策超时（5 轮）');
 }
 
-/* 关键词粗判 taskType（仅用于 skill 预筛，精确判断交给模型） */
+/* 关键词粗判 taskType（仅用于第一级候选预筛，精确判断交给模型）
+ *
+ * 注意词边界：旧版 /app/ 会把 "apple 官网" 判成 mobile（app 是 apple 的前缀）。
+ * 这里给英文词加 \b，且把品牌/作品集放在 mobile 之前判断。
+ */
 export function inferTaskType(prompt) {
   const p = (prompt || '').toLowerCase();
-  if (/(演示|幻灯片|ppt|deck|pitch|slides)/.test(p)) return 'deck';
+  if (/(演示|幻灯片|deck|pitch|slide|\bppt\b)/.test(p)) return 'deck';
+  if (/(品牌|作品集|\bportfolio\b|品牌页|brand)/.test(p)) return 'brand';
   if (/(后台|看板|dashboard|数据|统计|报表|监控)/.test(p)) return 'dashboard';
-  if (/(移动|手机|app|ios|android|小程序)/.test(p)) return 'mobile';
-  if (/(杂志|editorial|文章|博客|blog)/.test(p)) return 'editorial';
-  if (/(品牌|作品集|portfolio|品牌页)/.test(p)) return 'brand';
+  if (/(移动|手机|\bapp\b|\bios\b|android|小程序)/.test(p)) return 'mobile';
+  if (/(杂志|editorial|文章|博客|\bblog\b)/.test(p)) return 'editorial';
   return 'web';
 }
 
 /* 直连 DeepSeek（OpenAI 兼容 API） */
-async function callDeepSeek({ apiKey, systemPrompt, conversation }) {
+async function callDeepSeek({ apiKey, systemPrompt, conversation, model }) {
   const base = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-  const model = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+  model = model || process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },

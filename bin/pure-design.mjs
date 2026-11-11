@@ -156,7 +156,7 @@ async function runAgentCmd(promptArgs, opts) {
 
   let decision = null;
   try {
-    decision = await runRouter({ prompt, system: opts.system || 'default' });
+    decision = await runRouter({ prompt, system: opts.system || 'default', model });
   } catch (e) {
     console.error(`决策失败: ${e.message}`);
     process.exit(1);
@@ -166,15 +166,15 @@ async function runAgentCmd(promptArgs, opts) {
   /* 装配确认：Enter 确认 / 修改重决策 / --yes 跳过 / 非 TTY 自动跳过 */
   const isTTY = process.stdin.isTTY === true;
   if (opts.yes || !isTTY) {
-    printRecipe({ ...opts, model, skill: decision.skill });
+    printRecipe({ ...opts, template: decision.template, system: decision.designSystem, direction: decision.direction, model, skill: decision.skill });
   } else {
     const confirm = await confirmAssembly(decision, ask, opts.yes);
     if (confirm !== true) {
       // 用户给了修改指令 → 附加到 prompt 重新决策
       prompt = `${prompt}\n\n（用户修正：${confirm}，请按此修正重新决策）`;
-      decision = await runRouter({ prompt, system: opts.system || 'default' });
+      decision = await runRouter({ prompt, system: opts.system || 'default', model });
     }
-    printRecipe({ ...opts, model, skill: decision.skill });
+    printRecipe({ ...opts, template: decision.template, system: decision.designSystem, direction: decision.direction, model, skill: decision.skill });
   }
 
   /* 设计阶段：按决策结果创建会话 */
@@ -183,6 +183,7 @@ async function runAgentCmd(promptArgs, opts) {
     prompt, system: decision.designSystem, template: decision.template,
     direction: decision.direction, skill: decision.skill,
     out: opts.out, maxRounds: Number(opts.maxRounds) || 6, taste: opts.taste, modelId: model,
+    thinkingLevel: opts.thinking, visual: opts.visual !== false,
     clarify: true, onEvent: render.handle, outDir,
   });
   console.log(`· 输出文件: ${session.file}\n`);
@@ -219,15 +220,19 @@ async function runFastCmd(promptArgs, opts) {
   if (opts.file) prompt = readRel(opts.file).trim();
   if (!prompt) { console.error('缺少提示词。用法见 --help。'); process.exit(1); }
 
-  const base = (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, '');
-  const model = opts.model || defaultModel(base);
+  // fast 路径是 Anthropic Messages 协议。只给了 DeepSeek key 时，走 DeepSeek 的
+  // Anthropic 兼容端点（https://api.deepseek.com/anthropic），不需要额外的 Anthropic key。
+  const onlyDeepSeek = !process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN && process.env.DEEPSEEK_API_KEY;
+  const base = (process.env.ANTHROPIC_BASE_URL
+    || (onlyDeepSeek ? 'https://api.deepseek.com/anthropic' : 'https://api.anthropic.com')).replace(/\/+$/, '');
+  const model = opts.model || (onlyDeepSeek ? 'deepseek-v4-flash' : defaultModel(base));
   const { path: out, name: outname } = resolveOutputPath(opts.out, prompt, process.cwd());
 
   printRecipe({ ...opts, model });
   if (opts.refine) console.log('· 精修循环: 开');
   console.log('· 正在生成…（可能需 30–120 秒）');
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY || (onlyDeepSeek ? process.env.DEEPSEEK_API_KEY : undefined);
   const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
   if (!apiKey && !authToken) { console.error('未找到凭据：请设置 ANTHROPIC_API_KEY 或 ANTHROPIC_AUTH_TOKEN。'); process.exit(1); }
 
@@ -297,6 +302,8 @@ program
   .option('-f, --file <path>', '从文件读取提示词')
   .option('-m, --model <id>', '模型（默认 deepseek-v4-flash）')
   .option('--max-rounds <n>', 'agent 迭代轮数上限（默认 6）')
+  .option('--thinking <level>', '推理强度 low / medium / high（默认 medium；high 更慢更贵）', 'medium')
+  .option('--no-visual', '关闭真浏览器视觉自检（默认开启，需要本机 Chromium）')
   .option('--taste', '追加反 AI 味审美技能')
   .option('--yes', '跳过装配确认，直接开始设计')
   .option('--list', '列出全部设计系统')
